@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bảo Trân — Portfolio</title>
+  <meta name="description" content="Portfolio của Bùi Ngọc Bảo Trân: album ảnh và các website đã xây dựng." />
+  <meta name="theme-color" content="#050b14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%2300e5a0'/><stop offset='1' stop-color='%230ea5ff'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='%23050b14'/><path d='M9 11l-4 5 4 5M23 11l4 5-4 5M18 8l-4 16' stroke='url(%23g)' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+</head>
+<body>
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a href="#/" class="brand" aria-label="Trang chủ">
+      <span class="brand-mark">&lt;/&gt;</span>
+      <span class="brand-name" id="brand-name">bngbtran</span>
+    </a>
+    <nav class="tabs" role="tablist">
+      <a href="#/" data-tab="overview" class="tab">
+        <span class="tab-index">01</span> Tổng quan
+      </a>
+      <a href="#/albums" data-tab="albums" class="tab">
+        <span class="tab-index">02</span> Album ảnh
+      </a>
+      <a href="#/projects" data-tab="projects" class="tab">
+        <span class="tab-index">03</span> Dự án web
+      </a>
+      <span class="tab-indicator" aria-hidden="true"></span>
+    </nav>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <footer class="footer">
+    <span class="mono">© <span id="year"></span> <span id="footer-name"></span></span>
+    <span class="mono dim">built with HTML · CSS · JS</span>
+  </footer>
+
+  <!-- Lightbox xem ảnh -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lb-btn lb-close" data-lb="close" aria-label="Đóng">✕</button>
+    <button class="lb-btn lb-prev" data-lb="prev" aria-label="Ảnh trước">‹</button>
+    <figure class="lb-figure">
+      <img id="lb-img" alt="" />
+      <figcaption id="lb-caption"></figcaption>
+    </figure>
+    <button class="lb-btn lb-next" data-lb="next" aria-label="Ảnh sau">›</button>
+  </div>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

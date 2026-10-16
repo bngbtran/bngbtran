@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Quản trị — Portfolio</title>
+  <meta name="theme-color" content="#050b14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="stylesheet" href="assets/css/admin.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a href="index.html" class="brand" aria-label="Về trang chính">
+      <span class="brand-mark">&lt;/&gt;</span>
+      <span class="brand-name">admin</span>
+    </a>
+    <nav class="tabs admin-tabs" id="admin-tabs" hidden>
+      <button class="tab" data-tab="albums">Album</button>
+      <button class="tab" data-tab="projects">Dự án</button>
+      <button class="tab" data-tab="profile">Hồ sơ</button>
+      <button class="tab" data-tab="tools">Công cụ</button>
+    </nav>
+    <div class="admin-user mono" id="admin-user"></div>
+  </header>
+
+  <main id="admin" class="admin-main">
+    <div class="loading mono"><span class="dot"></span> đang khởi động...</div>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script type="module" src="assets/js/admin.js"></script>
+</body>
+</html>
