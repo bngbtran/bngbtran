@@ -6,17 +6,19 @@
     String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const img = Store.img;
+  const ARROW = `<span class="arrow" aria-hidden="true">→</span>`;
+  const ARROW_UP = `<span class="arrow" aria-hidden="true">↗</span>`;
 
-  app.innerHTML = `<div class="loading mono"><span class="dot"></span> đang tải dữ liệu...</div>`;
+  setupChrome();
+  app.innerHTML = `<div class="loading mono"><span class="dot pulse"></span> đang tải</div>`;
   const { PROFILE: P, ALBUMS, PROJECTS } = await Store.load();
 
   const formatDate = (d) => {
     if (!d) return "";
     const [y, m] = String(d).split("-");
-    return m ? `${m}/${y}` : y;
+    return m ? `Th${+m} ${y}` : y;
   };
-  const initials = (name) =>
-    name.split(/\s+/).filter(Boolean).slice(-2).map((w) => w[0]).join("").toUpperCase();
+  const pad2 = (n) => String(n).padStart(2, "0");
 
   /* ---------------- Album dạng cây ---------------- */
 
@@ -51,253 +53,265 @@
   const totalPhotos = ALBUMS.reduce((n, a) => n + countPhotos(a), 0);
   const totalAlbums = countAlbums(ALBUMS);
   const yearsCoding = P.startedCoding ? Math.max(1, new Date().getFullYear() - P.startedCoding) : 0;
-  const allSkills = (P.skillGroups || []).flatMap((g) => g.items);
+  const allSkills = (P.skillGroups || []).flatMap((g) => g.items || []);
+  const links = P.links || {};
+
+  /* ---------------- Khung chung: header, footer, theme ---------------- */
+
+  function setupChrome() {
+    const header = document.getElementById("site-header");
+    const onScroll = () => header.classList.toggle("scrolled", scrollY > 8);
+    addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const root = document.documentElement;
+      const current = root.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      const next = current === "light" ? "dark" : "light";
+      root.dataset.theme = next;
+      try {
+        localStorage.setItem("theme", next);
+      } catch (_) {}
+    });
+  }
+
+  function renderFooter() {
+    const social = Object.entries(links)
+      .filter(([k, v]) => v && k !== "email")
+      .map(([k, v]) => `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k[0].toUpperCase() + k.slice(1))}</a>`)
+      .join("");
+    document.getElementById("site-footer").innerHTML = `
+      <div class="wrap footer-cta">
+        <div>
+          <p class="eyebrow">Liên hệ</p>
+          <h2 style="margin-top:18px">Cùng tạo nên<br/>điều gì đó <span class="serif">thật tốt.</span></h2>
+          ${links.email ? `<a class="footer-mail" href="mailto:${esc(links.email)}">${esc(links.email)} ${ARROW_UP}</a>` : ""}
+        </div>
+      </div>
+      <div class="wrap footer-bottom">
+        <span>© ${new Date().getFullYear()} ${esc(P.name || "")}</span>
+        <nav class="footer-links">${social}</nav>
+      </div>`;
+    const contact = document.getElementById("header-contact");
+    if (links.email) contact.href = `mailto:${links.email}`;
+    else contact.hidden = true;
+  }
 
   /* ---------------- Tổng quan ---------------- */
 
   function viewOverview() {
-    const avatar = P.avatar
-      ? `<img src="${esc(img(P.avatar, 240))}" alt="${esc(P.name)}" />`
-      : `<span>${esc(initials(P.name))}</span>`;
-    const links = Object.entries(P.links || {})
-      .filter(([, v]) => v)
-      .map(([k, v]) => {
-        const href = k === "email" ? `mailto:${v}` : v;
-        return `<a class="chip-link" href="${esc(href)}" target="_blank" rel="noopener">${esc(k)}</a>`;
-      })
-      .join("");
-    const stack = (P.languages || []).slice(0, 3).map((l) => `<span class="s">"${esc(l.name)}"</span>`).join(", ");
     const current = (P.roadmap || []).find((r) => r.status === "current");
-    const next = (P.roadmap || []).find((r) => r.status === "next");
     const featured = PROJECTS.filter((p) => p.featured);
+    const nameParts = String(P.name || "").trim().split(/\s+/);
+    const last = nameParts.pop() || "";
+    const facts = [
+      ["Vị trí", esc(P.role || "")],
+      current && current.title !== P.role && ["Hiện tại", esc(current.title)],
+      P.location && ["Nơi ở", esc(P.location)],
+      links.email && ["Email", `<a class="v" href="mailto:${esc(links.email)}">${esc(links.email)}</a>`],
+      links.github && ["GitHub", `<a class="v" href="${esc(links.github)}" target="_blank" rel="noopener">${esc(links.github.replace(/^https?:\/\/(www\.)?/, ""))}</a>`],
+    ].filter(Boolean);
 
     return `
-      <section class="hero">
-        <div class="hero-text">
-          <p class="mono kicker"><span class="dot"></span> xin chào, mình là</p>
-          <h1 class="hero-name"><span class="grad">${esc(P.name)}</span></h1>
-          <p class="hero-role mono">${esc(P.role)}${P.openToWork ? ` <span class="badge-open">● open to work</span>` : ""}</p>
-          <p class="hero-typed mono"><span class="prompt">&gt;</span> <span id="typed"></span><span class="caret">▍</span></p>
-          <p class="hero-bio">${esc(P.bio)}</p>
-          <div class="hero-actions">
-            <a href="#/projects" class="btn btn-primary">Xem dự án</a>
-            <a href="#career" class="btn btn-ghost" data-scroll>Career path</a>
-          </div>
+      <section class="wrap hero">
+        <div class="hero-top">
+          <span class="eyebrow">Portfolio · ${new Date().getFullYear()}</span>
+          ${P.openToWork ? `<span class="status"><span class="dot pulse"></span> Sẵn sàng cho cơ hội mới</span>` : ""}
         </div>
+        <h1 class="hero-name">${esc(nameParts.join(" "))} <span class="serif">${esc(last)}</span></h1>
+        <p class="hero-role"><strong>${esc(P.role || "")}</strong>${P.taglines && P.taglines[0] ? ` — ${esc(P.taglines[0])}` : ""}</p>
 
-        <div class="terminal">
-          <div class="term-bar"><i></i><i></i><i></i><span class="mono">~/${esc(P.handle)}/dev.ts</span></div>
-          <div class="term-body mono">
-            <div class="avatar">${avatar}</div>
-            <p><span class="k">const</span> dev: <span class="t">Developer</span> = {</p>
-            <p class="ind">name: <span class="s">"${esc(P.name)}"</span>,</p>
-            <p class="ind">role: <span class="s">"${esc(P.role)}"</span>,</p>
-            <p class="ind">stack: [${stack}],</p>
-            ${current ? `<p class="ind">now: <span class="s">"${esc(current.title)}"</span>,</p>` : ""}
-            ${next ? `<p class="ind">next: <span class="s">"${esc(next.title)}"</span>,</p>` : ""}
-            <p class="ind">experience: <span class="n">${yearsCoding}</span>, <span class="c">// năm</span></p>
-            <p class="ind">openToWork: <span class="k">${P.openToWork ? "true" : "false"}</span>,</p>
-            <p>};</p>
-            <div class="links">${links}</div>
+        <div class="hero-bottom">
+          <div>
+            <p class="hero-bio">${esc(P.bio || "")}</p>
+            <div class="hero-actions">
+              <a href="#/projects" class="btn btn-primary">Xem dự án ${ARROW}</a>
+              <a href="#career" class="btn btn-outline" data-scroll>Lộ trình nghề nghiệp</a>
+            </div>
           </div>
+          <ul class="facts">
+            ${facts.map(([k, v]) => `<li><span class="k">${k}</span>${v.startsWith("<a") ? v : `<span class="v">${v}</span>`}</li>`).join("")}
+          </ul>
         </div>
       </section>
 
-      <section class="stats">
-        ${stat(yearsCoding, "năm code", "+")}
-        ${stat((P.languages || []).length, "ngôn ngữ lập trình")}
-        ${stat(allSkills.length, "công nghệ & kỹ năng")}
-        ${stat(PROJECTS.length, "website đã code")}
-      </section>
-
-      <nav class="subnav mono" aria-label="Mục lục">
-        <a href="#languages" data-scroll>languages</a>
-        <a href="#skills" data-scroll>skills</a>
-        <a href="#career" data-scroll>career</a>
-        <a href="#experience" data-scroll>experience</a>
-        <a href="#featured" data-scroll>projects</a>
-      </nav>
+      <div class="wrap">
+        <div class="stats">
+          ${stat(yearsCoding, "năm viết code", "+")}
+          ${stat((P.languages || []).length, "ngôn ngữ lập trình")}
+          ${stat(allSkills.length, "công nghệ & công cụ")}
+          ${stat(PROJECTS.length, "website đã xây dựng")}
+        </div>
+      </div>
 
       ${sectionLanguages()}
       ${sectionSkills()}
       ${sectionRoadmap()}
       ${sectionExperience()}
 
-      <section class="block" id="featured">
-        <div class="section-head">
-          ${title("05", "Dự án nổi bật")}
-          <a href="#/projects" class="more mono">tất cả dự án →</a>
-        </div>
-        <div class="project-grid">${featured.map(projectCard).join("") || empty("Đánh dấu featured: true cho dự án muốn hiện ở đây.")}</div>
-      </section>
+      ${
+        featured.length
+          ? section("05", "Dự án nổi bật", "Một vài sản phẩm tiêu biểu mình đã thiết kế và phát triển.",
+              `<div class="project-grid">${featured.map(projectCard).join("")}</div>`,
+              `<a href="#/projects" class="section-link">Tất cả dự án ${ARROW}</a>`, "featured")
+          : ""
+      }
 
-      <section class="block">
-        <div class="section-head">
-          ${title("06", "Ngoài giờ code: album ảnh")}
-          <a href="#/albums" class="more mono">${totalPhotos} ảnh · ${totalAlbums} album →</a>
-        </div>
-        <div class="album-grid">${ALBUMS.slice(0, 3).map((a) => albumCard(a, [a.id])).join("") || empty("Chưa có album nào.")}</div>
-      </section>
+      ${
+        ALBUMS.length
+          ? section("06", "Ngoài giờ code", `${totalPhotos} khung hình từ ${totalAlbums} album, những nơi mình đã đi qua.`,
+              `<div class="album-grid">${ALBUMS.slice(0, 3).map((a) => albumCard(a, [a.id])).join("")}</div>`,
+              `<a href="#/albums" class="section-link">Xem album ${ARROW}</a>`)
+          : ""
+      }
     `;
   }
 
-  const title = (num, text) =>
-    `<h2 class="section-title"><span class="mono num">${num}.</span> ${esc(text)}</h2>`;
+  const stat = (n, label, sup = "") =>
+    `<div class="stat"><span class="stat-num"><span data-count="${n}">${n}</span>${sup ? `<sup>${sup}</sup>` : ""}</span><span class="stat-label">${label}</span></div>`;
 
-  const stat = (n, label, suffix = "") =>
-    `<div class="stat"><span class="stat-num"><span data-count="${n}">0</span>${suffix}</span><span class="stat-label">${label}</span></div>`;
+  const empty = (msg) => `<p class="empty">${msg}</p>`;
 
-  const empty = (msg) => `<p class="empty mono">${msg}</p>`;
+  const section = (num, title, desc, body, extra = "", id = "") => `
+    <section class="wrap section"${id ? ` id="${id}"` : ""}>
+      <div class="section-grid">
+        <div class="section-label">
+          <span class="section-num">${num} /</span>
+          <h2 class="section-title">${esc(title)}</h2>
+          ${desc ? `<p class="section-desc">${esc(desc)}</p>` : ""}
+          ${extra}
+        </div>
+        <div class="section-body">${body}</div>
+      </div>
+    </section>`;
 
-  const LEVELS = ["", "Mới học", "Cơ bản", "Dùng tốt", "Thành thạo", "Rất thành thạo"];
+  const LEVELS = ["", "Mới học", "Cơ bản", "Thành thạo vừa", "Thành thạo", "Chuyên sâu"];
 
   function sectionLanguages() {
     const langs = P.languages || [];
     if (!langs.length) return "";
     const spoken = (P.spokenLanguages || [])
-      .map((s) => `<span><b>${esc(s.name)}</b> <span class="dim">· ${esc(s.level)}</span></span>`)
+      .map((s) => `<span><b>${esc(s.name)}</b> · ${esc(s.level)}</span>`)
       .join("");
-    return `
-      <section class="block" id="languages">
-        ${title("01", "Ngôn ngữ lập trình")}
-        <div class="lang-grid">
-          ${langs
-            .map((l) => {
-              const lv = Math.max(1, Math.min(5, l.level || 1));
-              return `
-            <div class="lang-card">
-              <div class="lang-top">
-                <h3 class="mono">${esc(l.name)}</h3>
-                <span class="lang-years mono">${l.years ? `${esc(l.years)} năm` : ""}</span>
-              </div>
-              <div class="meter" role="img" aria-label="Mức độ ${lv}/5">
-                ${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= lv ? "on" : ""}" style="--i:${i}"></i>`).join("")}
-              </div>
-              <div class="lang-level mono">${LEVELS[lv]}</div>
-              ${l.note ? `<p class="lang-note">${esc(l.note)}</p>` : ""}
-            </div>`;
-            })
-            .join("")}
-        </div>
-        ${spoken ? `<div class="spoken mono"><span class="c">// giao tiếp:</span> ${spoken}</div>` : ""}
-      </section>`;
+    const body = `
+      <div class="lang-list">
+        ${langs
+          .map((l) => {
+            const lv = Math.max(1, Math.min(5, l.level || 1));
+            return `
+          <div class="lang-row">
+            <div>
+              <div class="lang-name">${esc(l.name)}</div>
+              ${l.note ? `<div class="lang-note">${esc(l.note)}</div>` : ""}
+            </div>
+            <div class="meter" role="img" aria-label="Mức độ ${lv}/5">
+              ${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= lv ? "on" : ""}" style="--i:${i}"></i>`).join("")}
+            </div>
+            <div class="lang-level">${LEVELS[lv]}</div>
+            <div class="lang-years">${l.years ? `${esc(l.years)} năm` : ""}</div>
+          </div>`;
+          })
+          .join("")}
+      </div>
+      ${spoken ? `<div class="spoken">${spoken}</div>` : ""}`;
+    return section("01", "Ngôn ngữ lập trình", "Mức độ tự đánh giá trên thang 5 và số năm sử dụng thực tế.", body, "", "languages");
   }
 
   function sectionSkills() {
     const groups = P.skillGroups || [];
     if (!groups.length) return "";
-    return `
-      <section class="block" id="skills">
-        ${title("02", "Kỹ năng & công nghệ")}
-        <div class="skill-groups">
-          ${groups
-            .map(
-              (g) => `
-            <div class="skill-group">
-              <div class="skill-group-head">
-                <span class="skill-icon mono">${esc(g.icon || "#")}</span>
-                <h3>${esc(g.title)}</h3>
-                <span class="count mono">${g.items.length}</span>
-              </div>
-              <div class="skills">${g.items.map((s) => `<span class="skill">${esc(s)}</span>`).join("")}</div>
-            </div>`
-            )
-            .join("")}
-        </div>
-        ${
-          (P.learning || []).length
-            ? `<div class="learning">
-                <span class="mono learning-label"><span class="dot"></span> đang học</span>
-                ${P.learning.map((s) => `<span class="skill skill-learning">${esc(s)}</span>`).join("")}
-              </div>`
-            : ""
-        }
-      </section>`;
+    const body = `
+      <div class="skill-groups">
+        ${groups
+          .map(
+            (g) => `
+          <div class="skill-group">
+            <div class="skill-group-head"><h3>${esc(g.title)}</h3><span class="count">${pad2((g.items || []).length)}</span></div>
+            <ul class="skill-list">${(g.items || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+          </div>`
+          )
+          .join("")}
+      </div>
+      ${
+        (P.learning || []).length
+          ? `<div class="learning"><span class="learning-label"><span class="dot pulse"></span> Đang học</span>${P.learning
+              .map((s) => `<span class="item">${esc(s)}</span>`)
+              .join("")}</div>`
+          : ""
+      }`;
+    return section("02", "Kỹ năng & công nghệ", "Bộ công cụ mình dùng hằng ngày, chia theo từng mảng.", body, "", "skills");
   }
 
   function sectionRoadmap() {
     const steps = P.roadmap || [];
     if (!steps.length) return "";
-    const label = { done: "đã qua", current: "hiện tại", next: "mục tiêu" };
-    return `
-      <section class="block" id="career">
-        ${title("03", "Career path")}
-        <ol class="roadmap">
-          ${steps
-            .map(
-              (s, i) => `
-            <li class="road-step ${esc(s.status)}">
-              <div class="road-node mono">${s.status === "done" ? "✓" : String(i + 1).padStart(2, "0")}</div>
-              <div class="road-text">
-                <span class="road-status mono">${label[s.status] || ""}</span>
-                <h3>${esc(s.title)}</h3>
-                <p>${esc(s.detail || "")}</p>
-              </div>
-            </li>`
-            )
-            .join("")}
-        </ol>
-      </section>`;
+    const label = { done: "Đã hoàn thành", current: "Hiện tại", next: "Mục tiêu" };
+    const body = `
+      <ol class="roadmap" style="--n:${steps.length}">
+        ${steps
+          .map(
+            (s) => `
+          <li class="road-step ${esc(s.status)}">
+            <div class="road-track"><span class="road-node"></span></div>
+            <span class="road-status">${label[s.status] || ""}</span>
+            <h3>${esc(s.title)}</h3>
+            <p>${esc(s.detail || "")}</p>
+          </li>`
+          )
+          .join("")}
+      </ol>`;
+    return section("03", "Lộ trình nghề nghiệp", "Mình đang ở đâu và hướng tới đâu.", body, "", "career");
   }
 
   function sectionExperience() {
     const items = P.experience || [];
     if (!items.length) return "";
-    const typeLabel = { work: "work", education: "education", milestone: "milestone" };
-    return `
-      <section class="block" id="experience">
-        ${title("04", "Kinh nghiệm & học vấn")}
-        <div class="timeline">
-          ${items
-            .map(
-              (e) => `
-            <article class="tl-item ${esc(e.type || "")}">
-              <div class="tl-dot"></div>
-              <div class="tl-card">
-                <div class="tl-meta mono">
-                  <span class="tl-type">${typeLabel[e.type] || esc(e.type || "")}</span>
-                  <span class="dim">${esc(e.period || "")}</span>
-                </div>
-                <h3>${esc(e.title)}</h3>
-                ${e.org ? `<p class="tl-org">@ ${esc(e.org)}</p>` : ""}
-                ${e.description ? `<p class="tl-desc">${esc(e.description)}</p>` : ""}
-                ${
-                  (e.highlights || []).length
-                    ? `<ul class="tl-highlights">${e.highlights.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>`
-                    : ""
-                }
-                ${(e.tech || []).length ? `<div class="tags">${e.tech.map((t) => `<span class="tag mono">${esc(t)}</span>`).join("")}</div>` : ""}
-              </div>
-            </article>`
-            )
-            .join("")}
-        </div>
-      </section>`;
+    const typeLabel = { work: "Công việc", education: "Học vấn", milestone: "Cột mốc" };
+    const body = `
+      <div class="exp-list">
+        ${items
+          .map(
+            (e) => `
+          <article class="exp-item ${esc(e.type || "")}">
+            <div class="exp-period">${esc(e.period || "")}<span class="exp-type">${typeLabel[e.type] || esc(e.type || "")}</span></div>
+            <div>
+              <h3>${esc(e.title)}</h3>
+              ${e.org ? `<p class="exp-org">${esc(e.org)}</p>` : ""}
+              ${e.description ? `<p class="exp-desc">${esc(e.description)}</p>` : ""}
+              ${(e.highlights || []).length ? `<ul class="exp-highlights">${e.highlights.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
+              ${(e.tech || []).length ? `<div class="tech">${e.tech.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
+            </div>
+          </article>`
+          )
+          .join("")}
+      </div>`;
+    return section("04", "Kinh nghiệm & học vấn", "Những nơi mình đã làm việc, học tập và các cột mốc đáng nhớ.", body, "", "experience");
   }
 
   /* ---------------- Album ---------------- */
+
+  const FOLDER_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
 
   function albumCard(a, ids) {
     const cover = coverOf(a);
     const subs = kids(a).length;
     const n = countPhotos(a);
-    const meta = [subs && `${subs} album con`, `${n} ảnh`].filter(Boolean).join(" · ");
     return `
       <a class="album-card ${subs ? "is-folder" : ""}" href="${albumHref(ids)}">
         <div class="album-cover">
-          ${cover ? `<img src="${esc(img(cover, 800))}" alt="${esc(a.title)}" loading="lazy" />` : ""}
-          <span class="album-count mono">${meta}</span>
-          ${subs ? `<span class="album-folder mono">▸ thư mục</span>` : ""}
+          ${cover ? `<img src="${esc(img(cover, 900))}" alt="${esc(a.title)}" loading="lazy" />` : ""}
+          ${subs ? `<span class="album-badge">${FOLDER_ICON} ${subs} album</span>` : ""}
         </div>
         <div class="album-info">
           <h3>${esc(a.title)}</h3>
-          <p class="mono dim">${a.date ? formatDate(a.date) : ""}${a.date && a.description ? " · " : ""}${esc(a.description || "")}</p>
+          <span class="count">${n} ảnh</span>
         </div>
+        ${a.description || a.date ? `<p class="album-sub">${[a.date && formatDate(a.date), a.description && esc(a.description)].filter(Boolean).join(" · ")}</p>` : ""}
       </a>`;
   }
 
   function breadcrumb(chain) {
-    const parts = [`<a href="#/albums">albums</a>`];
+    const parts = [`<a href="#/albums">Album</a>`];
     chain.forEach((a, i) => {
       const ids = chain.slice(0, i + 1).map((x) => x.id);
       parts.push(
@@ -306,18 +320,20 @@
           : `<a href="${albumHref(ids)}">${esc(a.title)}</a>`
       );
     });
-    return `<nav class="crumbs mono" aria-label="Đường dẫn album">${parts.join('<span class="sep">/</span>')}</nav>`;
+    return `<nav class="crumbs" aria-label="Đường dẫn album">${parts.join('<span class="sep">/</span>')}</nav>`;
   }
 
   function viewAlbums(ids) {
     if (!ids.length) {
       return `
-        <section class="page-head">
-          <p class="mono kicker"><span class="dot"></span> 02 / album ảnh</p>
-          <h1>Những nơi mình đã <span class="grad">đi qua</span></h1>
-          <p class="dim">${totalAlbums} album · ${totalPhotos} ảnh. Bấm vào để đi sâu vào từng nơi.</p>
+        <section class="wrap page-head">
+          <span class="eyebrow">Album ảnh</span>
+          <h1 class="page-title">Những nơi <span class="serif">đã đi qua</span></h1>
+          <p class="page-meta">${pad2(totalAlbums)} album · ${totalPhotos} ảnh</p>
         </section>
-        <div class="album-grid">${ALBUMS.map((a) => albumCard(a, [a.id])).join("") || empty("Chưa có album nào. Thêm album trong assets/js/data.js")}</div>`;
+        <div class="wrap page-body">
+          <div class="album-grid">${ALBUMS.map((a) => albumCard(a, [a.id])).join("") || empty("Chưa có album nào.")}</div>
+        </div>`;
     }
 
     const chain = resolvePath(ids);
@@ -328,61 +344,57 @@
     const parentHref = chain.length > 1 ? albumHref(ids.slice(0, -1)) : "#/albums";
 
     return `
-      <section class="page-head">
+      <section class="wrap page-head">
         ${breadcrumb(chain)}
-        <h1><span class="grad">${esc(a.title)}</span></h1>
-        <p class="mono dim">${[a.date && formatDate(a.date), subs.length && `${subs.length} album con`, `${countPhotos(a)} ảnh`].filter(Boolean).join(" · ")}</p>
-        ${a.description ? `<p class="album-desc">${esc(a.description)}</p>` : ""}
+        <h1 class="page-title">${esc(a.title)}</h1>
+        <p class="page-meta">${[a.date && formatDate(a.date), subs.length && `${subs.length} album con`, `${countPhotos(a)} ảnh`].filter(Boolean).join(" · ")}</p>
+        ${a.description ? `<p class="page-desc">${esc(a.description)}</p>` : ""}
       </section>
-      ${
-        subs.length
-          ? `<div class="album-grid">${subs.map((c) => albumCard(c, [...ids, c.id])).join("")}</div>`
-          : ""
-      }
-      ${
-        photos.length
-          ? `${subs.length ? `<h2 class="section-title sub-title"><span class="mono num">//</span> Ảnh tại ${esc(a.title)}</h2>` : ""}
-             <div class="masonry">
-              ${photos
-                .map(
-                  (ph, i) => `
-                <button class="photo" data-path="${esc(ids.join("/"))}" data-index="${i}" aria-label="Xem ảnh ${i + 1}">
-                  <img src="${esc(img(ph.src, 900))}" alt="${esc(ph.caption || a.title)}" loading="lazy" />
-                  ${ph.caption ? `<span class="photo-cap">${esc(ph.caption)}</span>` : ""}
-                </button>`
-                )
-                .join("")}
-            </div>`
-          : ""
-      }
-      ${!subs.length && !photos.length ? empty("Album này chưa có ảnh.") : ""}
-      <a href="${parentHref}" class="back mono back-bottom">← quay lại</a>
-    `;
+      <div class="wrap page-body">
+        ${subs.length ? `<div class="album-grid">${subs.map((c) => albumCard(c, [...ids, c.id])).join("")}</div>` : ""}
+        ${
+          photos.length
+            ? `${subs.length ? `<h2 class="sub-title">Ảnh tại ${esc(a.title)} <span class="faint mono" style="font-size:13px">${photos.length}</span></h2>` : ""}
+               <div class="masonry">
+                ${photos
+                  .map(
+                    (ph, i) => `
+                  <button class="photo" data-path="${esc(ids.join("/"))}" data-index="${i}" aria-label="Xem ảnh ${i + 1}">
+                    <img src="${esc(img(ph.src, 900))}" alt="${esc(ph.caption || a.title)}" loading="lazy" />
+                    ${ph.caption ? `<span class="photo-cap">${esc(ph.caption)}</span>` : ""}
+                  </button>`
+                  )
+                  .join("")}
+              </div>`
+            : ""
+        }
+        ${!subs.length && !photos.length ? empty("Album này chưa có ảnh.") : ""}
+        <a href="${parentHref}" class="back">← Quay lại</a>
+      </div>`;
   }
 
   /* ---------------- Dự án ---------------- */
 
-  function projectCard(p) {
-    const thumb = p.image
-      ? `<img src="${esc(img(p.image, 900))}" alt="${esc(p.title)}" loading="lazy" />`
-      : `<div class="thumb-fallback mono">${esc(p.title.slice(0, 2).toUpperCase())}</div>`;
+  function projectCard(p, i) {
+    const title = String(p.title || "");
+    const media = p.image
+      ? `<img src="${esc(img(p.image, 1200))}" alt="${esc(title)}" loading="lazy" />`
+      : `<div class="thumb-fallback">${esc(title.split(/\s+/).slice(0, 2).map((w) => w[0]).join(""))}</div>`;
+    const href = p.demo || p.source || "";
     const links = [
-      p.demo && `<a href="${esc(p.demo)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Xem website ↗</a>`,
-      p.source && `<a href="${esc(p.source)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Mã nguồn</a>`,
-    ]
-      .filter(Boolean)
-      .join("");
+      p.demo && `<a href="${esc(p.demo)}" target="_blank" rel="noopener">Xem website ${ARROW_UP}</a>`,
+      p.source && `<a href="${esc(p.source)}" target="_blank" rel="noopener">Mã nguồn ${ARROW_UP}</a>`,
+    ].filter(Boolean).join("");
     return `
       <article class="project-card" data-tags="${esc((p.tags || []).join("|"))}">
-        <div class="project-thumb">
-          <div class="browser-bar"><i></i><i></i><i></i></div>
-          ${thumb}
-        </div>
+        ${href ? `<a class="project-media" href="${esc(href)}" target="_blank" rel="noopener">` : `<div class="project-media">`}
+          ${media}
+          <span class="project-index">${pad2(i + 1)}</span>
+        ${href ? "</a>" : "</div>"}
         <div class="project-body">
-          <div class="project-meta mono dim">${p.year ? esc(p.year) : ""}</div>
-          <h3>${esc(p.title)}</h3>
-          <p>${esc(p.description)}</p>
-          <div class="tags">${(p.tags || []).map((t) => `<span class="tag mono">${esc(t)}</span>`).join("")}</div>
+          <div class="project-head"><h3>${esc(title)}</h3><span class="project-year">${esc(p.year || "")}</span></div>
+          <p>${esc(p.description || "")}</p>
+          ${(p.tags || []).length ? `<div class="tech">${p.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
           ${links ? `<div class="project-links">${links}</div>` : ""}
         </div>
       </article>`;
@@ -391,25 +403,30 @@
   function viewProjects() {
     const tags = [...new Set(PROJECTS.flatMap((p) => p.tags || []))];
     return `
-      <section class="page-head">
-        <p class="mono kicker"><span class="dot"></span> 03 / dự án web</p>
-        <h1>Những website mình đã <span class="grad">code</span></h1>
-        <p class="dim">Lọc theo công nghệ:</p>
-        <div class="filters">
-          <button class="filter active mono" data-filter="*">tất cả</button>
-          ${tags.map((t) => `<button class="filter mono" data-filter="${esc(t)}">${esc(t)}</button>`).join("")}
-        </div>
+      <section class="wrap page-head">
+        <span class="eyebrow">Dự án</span>
+        <h1 class="page-title">Những website <span class="serif">mình đã xây</span></h1>
+        <p class="page-meta">${pad2(PROJECTS.length)} dự án</p>
+        ${
+          tags.length > 1
+            ? `<div class="filters">
+                <button class="filter active" data-filter="*">Tất cả</button>
+                ${tags.map((t) => `<button class="filter" data-filter="${esc(t)}">${esc(t)}</button>`).join("")}
+              </div>`
+            : ""
+        }
       </section>
-      <div class="project-grid">${PROJECTS.map(projectCard).join("") || empty("Chưa có dự án nào.")}</div>
-    `;
+      <div class="wrap page-body">
+        <div class="project-grid">${PROJECTS.map(projectCard).join("") || empty("Chưa có dự án nào.")}</div>
+      </div>`;
   }
 
   function viewNotFound() {
     return `
-      <section class="page-head notfound">
-        <p class="mono kicker"><span class="dot"></span> 404</p>
-        <h1>Không tìm thấy <span class="grad">trang này</span></h1>
-        <a href="#/" class="btn btn-primary">Về Tổng quan</a>
+      <section class="wrap notfound">
+        <span class="eyebrow">404</span>
+        <h1 class="page-title">Không tìm thấy <span class="serif">trang này</span></h1>
+        <a href="#/" class="btn btn-primary">Về trang chủ ${ARROW}</a>
       </section>`;
   }
 
@@ -424,35 +441,20 @@
     else [html, tab] = [viewNotFound(), null];
 
     app.innerHTML = `<div class="view">${html}</div>`;
-    setActiveTab(tab);
+    document.querySelectorAll(".nav a").forEach((a) => {
+      const on = a.dataset.tab === tab;
+      a.classList.toggle("active", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
     document.documentElement.style.scrollBehavior = "auto";
     window.scrollTo(0, 0);
     document.documentElement.style.scrollBehavior = "";
     afterRender(tab);
   }
 
-  function setActiveTab(tab) {
-    const indicator = document.querySelector(".tab-indicator");
-    let active = null;
-    document.querySelectorAll(".tab").forEach((t) => {
-      const on = t.dataset.tab === tab;
-      t.classList.toggle("active", on);
-      t.setAttribute("aria-selected", on);
-      if (on) active = t;
-    });
-    if (active) {
-      indicator.style.opacity = 1;
-      indicator.style.width = active.offsetWidth + "px";
-      indicator.style.transform = `translateX(${active.offsetLeft}px)`;
-    } else indicator.style.opacity = 0;
-  }
-
   function afterRender(tab) {
-    if (tab === "overview") {
-      startTyping();
-      countUp();
-    }
-    // Hiện dần các khối khi cuộn tới
+    if (tab === "overview") countUp();
     const io = new IntersectionObserver(
       (entries) =>
         entries.forEach((e) => {
@@ -461,47 +463,24 @@
             io.unobserve(e.target);
           }
         }),
-      { threshold: 0.12 }
+      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
     );
     app
-      .querySelectorAll(".album-card, .project-card, .photo, .stat, .lang-card, .skill-group, .road-step, .tl-item")
+      .querySelectorAll(".section-grid, .album-card, .project-card, .photo, .lang-row, .skill-group, .road-step, .exp-item")
       .forEach((el, i) => {
         el.classList.add("reveal");
-        el.style.transitionDelay = `${Math.min(i % 6, 5) * 60}ms`;
+        el.style.transitionDelay = `${(i % 4) * 70}ms`;
         io.observe(el);
       });
   }
 
-  /* ---------------- Hiệu ứng trang Tổng quan ---------------- */
-
-  let typingTimer;
-  function startTyping() {
-    clearTimeout(typingTimer);
-    const el = document.getElementById("typed");
-    const lines = P.taglines || [];
-    if (!el || !lines.length) return;
-    if (reduceMotion) return void (el.textContent = lines[0]);
-    let li = 0, ci = 0, deleting = false;
-    const tick = () => {
-      if (!document.body.contains(el)) return;
-      const line = lines[li];
-      ci += deleting ? -1 : 1;
-      el.textContent = line.slice(0, ci);
-      let delay = deleting ? 25 : 55;
-      if (!deleting && ci === line.length) [deleting, delay] = [true, 1800];
-      else if (deleting && ci === 0) [deleting, li, delay] = [false, (li + 1) % lines.length, 300];
-      typingTimer = setTimeout(tick, delay);
-    };
-    tick();
-  }
-
   function countUp() {
+    if (reduceMotion) return;
     document.querySelectorAll("[data-count]").forEach((el) => {
       const target = +el.dataset.count;
-      if (reduceMotion) return void (el.textContent = target);
       const start = performance.now();
       const step = (t) => {
-        const k = Math.min((t - start) / 1000, 1);
+        const k = Math.min((t - start) / 1200, 1);
         el.textContent = Math.round(target * (1 - Math.pow(1 - k, 3)));
         if (k < 1) requestAnimationFrame(step);
       };
@@ -512,13 +491,13 @@
   /* ---------------- Click trong trang ---------------- */
 
   app.addEventListener("click", (e) => {
-    // Cuộn tới mục trong trang Tổng quan (không đổi hash để router không chạy lại)
+    // Cuộn tới mục trong trang (không đổi hash để router không chạy lại)
     const jump = e.target.closest("[data-scroll]");
     if (jump) {
       e.preventDefault();
       const target = document.getElementById(jump.getAttribute("href").slice(1));
       if (target) {
-        const top = target.getBoundingClientRect().top + scrollY - document.querySelector(".topbar").offsetHeight - 16;
+        const top = target.getBoundingClientRect().top + scrollY - document.getElementById("site-header").offsetHeight - 8;
         window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
       }
       return;
@@ -541,6 +520,7 @@
   const lb = document.getElementById("lightbox");
   const lbImg = document.getElementById("lb-img");
   const lbCap = document.getElementById("lb-caption");
+  const lbCount = document.getElementById("lb-count");
   let lbPhotos = [], lbIndex = 0, lastFocus = null;
 
   function openLightbox(ids, index) {
@@ -551,7 +531,7 @@
     lb.hidden = false;
     document.body.style.overflow = "hidden";
     showPhoto(index);
-    lb.querySelector(".lb-close").focus();
+    lb.querySelector('[data-lb="close"]').focus();
   }
 
   function showPhoto(i) {
@@ -561,7 +541,8 @@
     lbImg.onload = () => lbImg.classList.add("loaded");
     lbImg.src = img(ph.src, 2000);
     lbImg.alt = ph.caption || "";
-    lbCap.innerHTML = `<span class="mono">${lbIndex + 1} / ${lbPhotos.length}</span>${ph.caption ? ` · ${esc(ph.caption)}` : ""}`;
+    lbCount.textContent = `${pad2(lbIndex + 1)} / ${pad2(lbPhotos.length)}`;
+    lbCap.textContent = ph.caption || "";
   }
 
   function closeLightbox() {
@@ -573,7 +554,7 @@
 
   lb.addEventListener("click", (e) => {
     const action = e.target.closest("[data-lb]")?.dataset.lb;
-    if (action === "close" || e.target === lb) closeLightbox();
+    if (action === "close" || e.target === lb || e.target.classList.contains("lb-figure")) closeLightbox();
     else if (action === "prev") showPhoto(lbIndex - 1);
     else if (action === "next") showPhoto(lbIndex + 1);
   });
@@ -594,65 +575,9 @@
     touchX = null;
   });
 
-  /* ---------------- Nền "mạng lưới" động ---------------- */
-
-  function startBackground() {
-    const c = document.getElementById("bg-canvas");
-    const ctx = c.getContext("2d");
-    let w, h, nodes;
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = c.width = innerWidth * dpr;
-      h = c.height = innerHeight * dpr;
-      c.style.width = innerWidth + "px";
-      c.style.height = innerHeight + "px";
-      const count = Math.round(Math.min(70, (innerWidth * innerHeight) / 22000));
-      nodes = Array.from({ length: count }, () => ({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.25 * dpr,
-        vy: (Math.random() - 0.5) * 0.25 * dpr,
-      }));
-    };
-    resize();
-    addEventListener("resize", resize);
-
-    const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-      const maxD = 150 * (w / innerWidth);
-      for (const n of nodes) {
-        n.x += n.vx; n.y += n.vy;
-        if (n.x < 0 || n.x > w) n.vx *= -1;
-        if (n.y < 0 || n.y > h) n.vy *= -1;
-      }
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i], b = nodes[j];
-          const d = Math.hypot(a.x - b.x, a.y - b.y);
-          if (d < maxD) {
-            const t = a.x / w;
-            ctx.strokeStyle = `rgba(${Math.round(14 * t)}, ${Math.round(229 - 64 * t)}, ${Math.round(160 + 95 * t)}, ${0.18 * (1 - d / maxD)})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-          }
-        }
-      }
-      for (const n of nodes) {
-        ctx.fillStyle = n.x / w < 0.5 ? "rgba(0,229,160,.55)" : "rgba(14,165,255,.55)";
-        ctx.beginPath(); ctx.arc(n.x, n.y, 1.6 * (w / innerWidth), 0, Math.PI * 2); ctx.fill();
-      }
-      if (!reduceMotion) requestAnimationFrame(draw);
-    };
-    draw();
-  }
-
   /* ---------------- Khởi động ---------------- */
 
-  document.getElementById("brand-name").textContent = P.handle;
-  document.getElementById("footer-name").textContent = P.name;
-  document.getElementById("year").textContent = new Date().getFullYear();
+  renderFooter();
   addEventListener("hashchange", route);
-  addEventListener("resize", () => setActiveTab(document.querySelector(".tab.active")?.dataset.tab));
-  startBackground();
   route();
 })();

@@ -2,7 +2,7 @@
 [hidden] { display: none !important; }
 .admin-main { max-width: 1280px; padding-top: 32px; }
 .admin-tabs .tab { border: 0; background: none; cursor: pointer; }
-.admin-tabs .tab.active { background: var(--grad); color: var(--bg); }
+.admin-tabs .tab.active { background: var(--text); color: var(--bg); }
 .admin-user { font-size: 12px; display: flex; gap: 8px; align-items: center; }
 .link-btn { background: none; border: 0; color: var(--cyan); cursor: pointer; font-family: var(--mono); font-size: 12px; padding: 0; }
 .link-btn:hover { color: var(--green); }
@@ -16,7 +16,7 @@ code { font-family: var(--mono); font-size: 0.9em; color: var(--green); backgrou
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 22px; margin-bottom: 20px;
 }
-.panel h1 { font-size: clamp(26px, 4vw, 38px); margin-bottom: 12px; }
+.panel h1 { font-size: clamp(26px, 4vw, 38px); margin-bottom: 12px; letter-spacing: -0.03em; }
 .panel h2 { font-size: 20px; margin-bottom: 8px; }
 .panel.narrow { max-width: 560px; margin: 8vh auto; }
 .panel.center { text-align: center; }
