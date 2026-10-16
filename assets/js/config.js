@@ -17,7 +17,7 @@ const FIREBASE = {
 
 const CLOUDINARY = {
   cloudName: "db2bvhhbe", // tên cloud, xem ở trang Dashboard của Cloudinary
-  uploadPreset: "",     // tên upload preset dạng "Unsigned"
+  uploadPreset: "bngbtran", // tên upload preset dạng "Unsigned"
   folder: "portfolio",  // thư mục gốc chứa ảnh trên Cloudinary
 };
 
