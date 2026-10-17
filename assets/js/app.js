@@ -924,6 +924,15 @@
       renderFooter();
       route(true);
     },
+    // Thay toàn bộ dữ liệu (cập nhật realtime từ live.js) rồi vẽ lại, giữ nguyên vị trí cuộn
+    replace(data) {
+      const profile = { ...data.PROFILE }; // chép trước: có thể chính là object P đang dùng
+      for (const k of Object.keys(P)) delete P[k];
+      Object.assign(P, profile);
+      ALBUMS.splice(0, ALBUMS.length, ...data.ALBUMS);
+      PROJECTS.splice(0, PROJECTS.length, ...data.PROJECTS);
+      this.refresh();
+    },
   };
 
   renderFooter();

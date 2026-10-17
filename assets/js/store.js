@@ -80,15 +80,24 @@ const Store = (() => {
       getCollection("albums"),
       getCollection("projects"),
     ]);
-    const data = {
+    const data = shape(profile, albums, projects);
+    saveCache(data);
+    return data;
+  }
+
+  // Dữ liệu thô từ Firestore (REST hoặc realtime) → dạng trang dùng
+  function shape(profile, albums, projects) {
+    return {
       PROFILE: profile || (typeof PROFILE !== "undefined" ? PROFILE : {}),
       ALBUMS: buildTree(albums),
-      PROJECTS: projects.sort(byOrder),
+      PROJECTS: [...projects].sort(byOrder),
     };
+  }
+
+  function saveCache(data) {
     try {
       sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), data }));
     } catch (_) {}
-    return data;
   }
 
   async function load() {
@@ -118,5 +127,5 @@ const Store = (() => {
     } catch (_) {}
   };
 
-  return { online, load, img, buildTree, decodeFields, clearCache };
+  return { online, load, img, buildTree, decodeFields, clearCache, shape, saveCache };
 })();

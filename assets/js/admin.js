@@ -3,7 +3,7 @@
    • Bấm vào chữ để sửa trực tiếp
    • Rê chuột vào một mục: ✎ sửa chi tiết · ↑↓ đổi chỗ · ✕ xóa
    • "+ Thêm" ở cuối mỗi danh sách, kéo thả ảnh vào album
-   • Mọi thay đổi giữ tạm trên máy, bấm "Lưu" mới ghi lên Firestore
+   • Sửa gì là tự lưu lên Firestore ngay; trang chính đang mở cập nhật realtime
    ========================================================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
@@ -177,20 +177,30 @@ const dirtyCount = () =>
   (dirty.profile ? 1 : 0) + dirty.projects.size + dirty.albums.size + dirty.delProjects.size + dirty.delAlbums.size;
 let me = null;
 
+let saving = false, saveTimer = null, savedAt = null, saveError = "";
+
+// Mọi thay đổi tự lưu sau ~0,7 giây; trang chính đang mở ở nơi khác cập nhật ngay (live.js)
+function scheduleSave(delay = 700) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, delay);
+}
+
 function changed(kind, id) {
   if (kind === "profile") dirty.profile = true;
   else if (kind === "project") dirty.projects.add(id);
   else if (kind === "album") dirty.albums.add(id);
+  scheduleSave();
   renderDock();
 }
 
 function refresh() {
   PF().refresh();
+  if (dirtyCount()) scheduleSave();
   renderDock();
 }
 
 addEventListener("beforeunload", (e) => {
-  if (dirtyCount()) e.preventDefault();
+  if (dirtyCount() || saving) e.preventDefault();
 });
 
 function startEditing(user) {
@@ -202,24 +212,31 @@ function startEditing(user) {
   decorate();
 }
 
+const hhmm = (d) => d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
 function renderDock() {
   if (!me) return;
-  const n = dirtyCount();
+  const pending = dirtyCount();
+  const status = saveError
+    ? `<span class="small err-text">Chưa lưu được: ${esc(saveError)}</span><button class="btn btn-primary btn-sm" data-dock="retry">Thử lại</button>`
+    : saving
+      ? `<span class="small warn"><span class="spin"></span> Đang lưu...</span>`
+      : pending
+        ? `<span class="small warn">Sắp lưu...</span>`
+        : `<span class="small dim">${savedAt ? `Đã lưu lúc ${hhmm(savedAt)} · trang chính đã cập nhật` : "Sửa gì là tự lưu ngay"}</span>`;
   dock.innerHTML = `
     <span class="ed-state on"><span class="dot pulse"></span> Đang chỉnh sửa</span>
-    <span class="small ${n ? "warn" : "dim"}">${n ? `${n} thay đổi chưa lưu` : "Đã lưu hết"}</span>
+    ${status}
     <div class="ed-menu">
       <button class="btn btn-ghost btn-sm" data-dock="menu">Công cụ ▾</button>
       <div class="ed-menu-list" hidden>
         <button data-dock="measure">Đo kích thước ảnh còn thiếu</button>
         <button data-dock="export">Tải bản sao lưu (JSON)</button>
         <button data-dock="import">Nhập dữ liệu mẫu từ data.js</button>
-        <a href="index.html" target="_blank">Xem trang chính ↗</a>
+        <a href="index.html" target="_blank">Mở trang chính ở tab mới ↗</a>
         <button data-dock="logout">Đăng xuất (${esc(me.email)})</button>
       </div>
-    </div>
-    <button class="btn btn-ghost btn-sm" data-dock="discard" ${n ? "" : "disabled"}>Bỏ thay đổi</button>
-    <button class="btn btn-primary btn-sm" data-dock="save" ${n ? "" : "disabled"}>Lưu</button>`;
+    </div>`;
 }
 
 dock.addEventListener("click", async (e) => {
@@ -229,15 +246,13 @@ dock.addEventListener("click", async (e) => {
   const menu = dock.querySelector(".ed-menu-list");
   if (act === "menu") return (menu.hidden = !menu.hidden);
   if (menu) menu.hidden = true;
-  if (act === "save") return save();
-  if (act === "discard") {
-    if (confirm("Bỏ tất cả thay đổi chưa lưu?")) {
-      Object.assign(dirty, { profile: false }), ["projects", "albums", "delProjects", "delAlbums"].forEach((k) => dirty[k].clear());
-      location.reload();
-    }
+  if (act === "retry") {
+    saveError = "";
+    return save();
   }
   if (act === "logout") {
-    if (dirtyCount() && !confirm("Còn thay đổi chưa lưu. Vẫn đăng xuất?")) return;
+    if (dirtyCount()) await save();
+    if (dirtyCount() && !confirm("Còn thay đổi chưa lưu được. Vẫn đăng xuất?")) return;
     me = null;
     signOut(auth);
   }
@@ -249,35 +264,52 @@ dock.addEventListener("click", async (e) => {
 /* ---------------- Lưu lên Firestore ---------------- */
 
 async function save() {
+  clearTimeout(saveTimer);
+  if (saving) return scheduleSave(300);
+  if (!dirtyCount()) return;
+  // Lấy phần việc hiện có rồi xóa khỏi hàng chờ; thay đổi mới trong lúc lưu sẽ vào lượt sau
+  const job = {
+    profile: dirty.profile,
+    projects: [...dirty.projects], albums: [...dirty.albums],
+    delProjects: [...dirty.delProjects], delAlbums: [...dirty.delAlbums],
+  };
+  dirty.profile = false;
+  ["projects", "albums", "delProjects", "delAlbums"].forEach((k) => dirty[k].clear());
+
   const { P, PROJECTS } = PF();
   const batch = writeBatch(db);
-  if (dirty.profile) batch.set(doc(db, "site", "profile"), clean(P));
-  for (const id of dirty.projects) {
+  if (job.profile) batch.set(doc(db, "site", "profile"), clean(P));
+  for (const id of job.projects) {
     const p = PROJECTS.find((x) => x._id === id);
     if (!p) continue;
     const { _id, ...data } = p;
     batch.set(doc(db, "projects", id), clean(data));
   }
-  for (const id of dirty.delProjects) batch.delete(doc(db, "projects", id));
-  for (const id of dirty.albums) {
+  for (const id of job.delProjects) batch.delete(doc(db, "projects", id));
+  for (const id of job.albums) {
     const a = findAlbum(id);
     if (a) batch.set(doc(db, "albums", id), albumDoc(a));
   }
-  for (const id of dirty.delAlbums) batch.delete(doc(db, "albums", id));
-  const btn = dock.querySelector('[data-dock="save"]');
-  btn.disabled = true;
-  btn.textContent = "Đang lưu...";
+  for (const id of job.delAlbums) batch.delete(doc(db, "albums", id));
+
+  saving = true;
+  renderDock();
   try {
     await batch.commit();
-    dirty.profile = false;
-    ["projects", "albums", "delProjects", "delAlbums"].forEach((k) => dirty[k].clear());
+    savedAt = new Date();
+    saveError = "";
     Store.clearCache();
-    toast("Đã lưu. Trang chính đã cập nhật.");
   } catch (err) {
     console.error(err);
-    toast(err.code === "permission-denied" ? "Không có quyền ghi. Kiểm tra firestore.rules." : `Lỗi khi lưu: ${err.message}`, "err");
+    // Trả lại hàng chờ để lần sau lưu tiếp
+    if (job.profile) dirty.profile = true;
+    ["projects", "albums", "delProjects", "delAlbums"].forEach((k) => job[k].forEach((id) => dirty[k].add(id)));
+    saveError = err.code === "permission-denied" ? "không có quyền ghi (kiểm tra firestore.rules)" : err.message;
+    toast(`Lỗi khi lưu: ${saveError}`, "err");
   }
+  saving = false;
   renderDock();
+  if (dirtyCount() && !saveError) scheduleSave(300);
 }
 
 const albumDoc = (a) =>
@@ -839,7 +871,7 @@ async function uploadPhotos(albumId, files) {
   a.photos = [...(a.photos || []).map(PF().photoOf), ...ok];
   if (ok.length) changed("album", albumId);
   refresh();
-  toast(failed ? `Đã thêm ${ok.length} ảnh, ${failed} ảnh lỗi.` : `Đã thêm ${ok.length} ảnh. Nhớ bấm Lưu.`, failed ? "err" : "ok");
+  toast(failed ? `Đã thêm ${ok.length} ảnh, ${failed} ảnh lỗi.` : `Đã thêm ${ok.length} ảnh.`, failed ? "err" : "ok");
 }
 
 /* Thu nhỏ ảnh về tối đa 2560px, JPEG chất lượng 0.86 */
@@ -907,7 +939,7 @@ async function measurePhotos() {
     changed("album", a._id);
   }
   refresh();
-  toast(n ? `Đã đo ${n} ảnh. Bấm Lưu để ghi lại.` : "Tất cả ảnh đã có kích thước.");
+  toast(n ? `Đã đo ${n} ảnh.` : "Tất cả ảnh đã có kích thước.");
 }
 
 function exportBackup() {
