@@ -26,6 +26,9 @@ const PROFILE = {
   ],
   bio: "Mình là Trân, một lập trình viên web tập trung vào frontend. Mình thích xây những giao diện gọn gàng, hiệu năng tốt và chăm chút trải nghiệm người dùng, đồng thời đang mở rộng sang backend để làm chủ toàn bộ sản phẩm. Ngoài code, mình đi đây đi đó và chụp ảnh.",
   location: "Việt Nam",
+  // Trang "Thông tin cá nhân": đoạn giới thiệu dài (xuống dòng = sang đoạn mới) và sở thích
+  about: "Mình bắt đầu viết code từ những trang HTML đầu tiên hồi đại học, rồi mê luôn cảm giác biến một ý tưởng thành thứ người khác dùng được.\nMình tin một giao diện tốt là nơi thẩm mỹ và kỹ thuật gặp nhau: đẹp để người ta muốn dùng, chắc để người ta tin dùng.",
+  interests: ["Nhiếp ảnh", "Du lịch", "Typography", "Generative art", "Cà phê"],
   avatar: "", // để trống sẽ hiện chữ cái đầu; hoặc "images/avatar.jpg"
   links: {
     github: "https://github.com/bngbtran",
@@ -201,3 +204,55 @@ const PROJECTS = [
     year: 2025,
   },
 ];
+
+/* =========================================================
+   TEXTS — các dòng chữ trên trang (sửa được trong admin → "Nội dung trang")
+   • *chữ*    : chữ nghiêng màu nhấn
+   • xuống dòng: ngắt dòng (dùng cho tiêu đề lớn)
+   • {photos} {albums} {projects} {location} {year}: tự thay bằng số liệu thật
+   ========================================================= */
+const TEXTS = {
+  heroCommand: "whoami",
+  statement: "ở nơi thẩm mỹ gặp kỹ thuật: mỗi dòng code là một nét vẽ.",
+  openToWork: "Sẵn sàng cho cơ hội mới",
+  ctaPrimary: "Xem dự án",
+  ctaSecondary: "Lộ trình nghề nghiệp",
+
+  statYears: "năm viết code",
+  statLanguages: "ngôn ngữ lập trình",
+  statSkills: "công nghệ & công cụ",
+  statProjects: "website đã xây dựng",
+
+  languagesTitle: "Ngôn ngữ lập trình",
+  languagesDesc: "Mức độ tự đánh giá trên thang 5 và số năm sử dụng thực tế.",
+  skillsTitle: "Kỹ năng & công nghệ",
+  skillsDesc: "Bộ công cụ mình dùng hằng ngày, chia theo từng mảng.",
+  learningLabel: "Đang học",
+  roadmapTitle: "Lộ trình nghề nghiệp",
+  roadmapDesc: "Mình đang ở đâu và hướng tới đâu.",
+  experienceTitle: "Kinh nghiệm & học vấn",
+  experienceDesc: "Những nơi mình đã làm việc, học tập và các cột mốc đáng nhớ.",
+  featuredTitle: "Dự án nổi bật",
+  featuredDesc: "Một vài sản phẩm tiêu biểu mình đã thiết kế và phát triển.",
+  featuredLink: "Tất cả dự án",
+  albumsPreviewTitle: "Ngoài giờ code",
+  albumsPreviewDesc: "{photos} khung hình từ {albums} album, những nơi mình đã đi qua.",
+  albumsPreviewLink: "Xem album",
+
+  albumsEyebrow: "Album ảnh",
+  albumsHeading: "Những nơi *đã đi qua*",
+  projectsEyebrow: "Dự án",
+  projectsHeading: "Những website *mình đã xây*",
+
+  aboutEyebrow: "Thông tin cá nhân",
+  aboutHeading: "Một chút *về mình*",
+  aboutContact: "Liên hệ",
+  aboutInterests: "Sở thích",
+  aboutLanguages: "Ngôn ngữ",
+  aboutLearning: "Đang học",
+
+  footerEyebrow: "Liên hệ",
+  footerHeading: "Cùng tạo nên\nđiều gì đó *thật tốt.*",
+  footerRegards: "Thân ái,",
+  footerNote: "Viết tay & code tay tại {location}",
+};

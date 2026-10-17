@@ -9,8 +9,12 @@
   const ARROW = `<span class="arrow" aria-hidden="true">→</span>`;
   const ARROW_UP = `<span class="arrow" aria-hidden="true">↗</span>`;
 
+  // Trang quản trị dùng lại toàn bộ file này, chỉ bật thêm chế độ chỉnh sửa
+  const EDIT = !!window.EDIT_MODE;
+
   setupChrome();
   app.innerHTML = `<div class="loading mono"><span class="dot pulse"></span> đang tải</div>`;
+  if (EDIT) Store.clearCache();
   const { PROFILE: P, ALBUMS, PROJECTS } = await Store.load();
 
   const formatDate = (d) => {
@@ -50,11 +54,52 @@
   };
   const albumHref = (ids) => "#/albums/" + ids.map(encodeURIComponent).join("/");
 
-  const totalPhotos = ALBUMS.reduce((n, a) => n + countPhotos(a), 0);
-  const totalAlbums = countAlbums(ALBUMS);
-  const yearsCoding = P.startedCoding ? Math.max(1, new Date().getFullYear() - P.startedCoding) : 0;
-  const allSkills = (P.skillGroups || []).flatMap((g) => g.items || []);
-  const links = P.links || {};
+  /* ---------------- Số liệu & chữ (tính lại mỗi khi dữ liệu đổi) ---------------- */
+
+  let totalPhotos, totalAlbums, yearsCoding, allSkills, links, T, vars;
+  function derive() {
+    totalPhotos = ALBUMS.reduce((n, a) => n + countPhotos(a), 0);
+    totalAlbums = countAlbums(ALBUMS);
+    yearsCoding = P.startedCoding ? Math.max(1, new Date().getFullYear() - P.startedCoding) : 0;
+    allSkills = (P.skillGroups || []).flatMap((g) => g.items || []);
+    links = P.links || {};
+    // Chữ trên trang: mặc định là TEXTS trong data.js, ghi đè bằng P.texts
+    T = { ...(typeof TEXTS !== "undefined" ? TEXTS : {}) };
+    if (P.statement) T.statement = P.statement;
+    for (const [k, v] of Object.entries(P.texts || {})) if (v) T[k] = v;
+    vars = { photos: totalPhotos, albums: totalAlbums, projects: PROJECTS.length, location: P.location || "Việt Nam", year: new Date().getFullYear() };
+  }
+  derive();
+
+  const fill = (k) => String(T[k] || "").replace(/\{(\w+)\}/g, (m, v) => (v in vars ? vars[v] : m));
+
+  /* ---------------- Đánh dấu cho chế độ chỉnh sửa (trang thường không thêm gì) ----------------
+     ed()   : chữ sửa trực tiếp được          data-edit="T.key" | "P.bio" | "ALBUM.<id>.title"
+     item() : một mục có nút sửa/xóa/đổi chỗ  data-item="<loại>" data-key="<chỉ số hoặc id>"
+     list() : danh sách có nút "+ Thêm"       data-list="<loại>"                              */
+  const ed = (path, html, { multi = false, ph = "" } = {}) =>
+    EDIT ? `<span class="ed" data-edit="${path}"${multi ? " data-multi" : ""}${ph ? ` data-ph="${esc(ph)}"` : ""}>${html}</span>` : html;
+  const item = (kind, key, extra = "") => (EDIT ? ` data-item="${kind}" data-key="${esc(key)}"${extra}` : "");
+  const list = (kind, extra = "") => (EDIT ? ` data-list="${kind}"${extra}` : "");
+
+  const txt = (k) => ed(`T.${k}`, esc(fill(k)));
+  // *chữ* → nghiêng màu nhấn, xuống dòng → ngắt dòng
+  const rich = (k) => ed(`T.${k}`, esc(fill(k)).replace(/\*([^*]+)\*/g, '<span class="serif">$1</span>').replace(/\n/g, "<br/>"), { multi: true });
+
+  /* ---------------- Tỉ lệ ảnh cho bố cục justified ----------------
+     Ảnh tải lên qua admin có sẵn w/h. Ảnh chưa biết kích thước thì đo khi tải xong. */
+  const ratioOf = (ph) => (ph && ph.w && ph.h ? ph.w / ph.h : 0);
+  const ratioAttr = (r) => (r ? ` style="--r:${r.toFixed(3)}"` : " data-ratio-auto");
+  const findPhoto = (a, src) => ownPhotos(a).find((p) => p.src === src) || kids(a).map((c) => findPhoto(c, src)).find(Boolean);
+  app.addEventListener(
+    "load",
+    (e) => {
+      const im = e.target;
+      const box = im.tagName === "IMG" && im.naturalWidth && im.closest("[data-ratio-auto]");
+      if (box) box.style.setProperty("--r", (im.naturalWidth / im.naturalHeight).toFixed(3));
+    },
+    true
+  );
 
   /* ---------------- Khung chung: header, footer, theme ---------------- */
 
@@ -66,7 +111,7 @@
 
     document.getElementById("theme-toggle").addEventListener("click", () => {
       const root = document.documentElement;
-      const current = root.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      const current = root.dataset.theme || "dark";
       const next = current === "light" ? "dark" : "light";
       root.dataset.theme = next;
       try {
@@ -106,19 +151,19 @@
     document.getElementById("site-footer").innerHTML = `
       <div class="wrap footer-cta">
         <div>
-          <p class="eyebrow">Liên hệ</p>
-          <h2 style="margin-top:18px">Cùng tạo nên<br/>điều gì đó <span class="serif">thật tốt.</span></h2>
+          <p class="eyebrow">${txt("footerEyebrow")}</p>
+          <h2 style="margin-top:18px">${rich("footerHeading")}</h2>
           ${links.email ? `<a class="footer-mail" href="mailto:${esc(links.email)}">${esc(links.email)} ${ARROW_UP}</a>` : ""}
         </div>
-        <div class="footer-sign sig-draw" aria-hidden="true">
-          <span class="footer-regards">Thân ái,</span>
-          <span class="sig"></span>
-          <span class="footer-stamp">Bảo<br/>Trân</span>
+        <div class="footer-sign sig-draw${EDIT ? " in" : ""}">
+          <span class="footer-regards">${txt("footerRegards")}</span>
+          <span class="sig" aria-hidden="true"></span>
+          <span class="footer-stamp" aria-hidden="true">Bảo<br/>Trân</span>
         </div>
       </div>
       <div class="wrap footer-bottom">
         <span>© ${new Date().getFullYear()} ${esc(P.name || "")}</span>
-        <span class="serif">Viết tay & code tay tại ${esc(P.location || "Việt Nam")}</span>
+        <span class="serif">${txt("footerNote")}</span>
         <nav class="footer-links">${social}</nav>
       </div>`;
     const sign = document.querySelector("#site-footer .sig-draw");
@@ -128,9 +173,6 @@
         obs.disconnect();
       }
     }, { threshold: 0.5 }).observe(sign);
-    const contact = document.getElementById("header-contact");
-    if (links.email) contact.href = `mailto:${links.email}`;
-    else contact.hidden = true;
   }
 
   /* ---------------- Tổng quan ---------------- */
@@ -141,7 +183,8 @@
     const nameParts = String(P.name || "").trim().split(/\s+/);
     const last = nameParts[nameParts.length - 1] || "";
     const year = new Date().getFullYear();
-    const ring = `${P.role || "Portfolio"} ✦ ${P.openToWork ? "Sẵn sàng cho cơ hội mới" : `Portfolio ${year}`} ✦ `;
+    const ring = `${P.role || "Portfolio"} ✦ ${P.openToWork ? fill("openToWork") : `Portfolio ${year}`} ✦ `;
+    section.n = 0;
     const taglines = P.taglines || [];
     const facts = [
       ["Vị trí", esc(P.role || "")],
@@ -152,15 +195,15 @@
     ].filter(Boolean);
 
     return `
-      <section class="wrap hero">
+      <section class="wrap hero"${item("profile", "me")}>
         <canvas class="hero-field" aria-hidden="true"></canvas>
         <div class="hero-meta">
           <span>Portfolio · №${year}</span>
           <span>${esc(P.location || "Việt Nam")} · GMT+7 · <span class="clock" data-clock>--:--:--</span></span>
-          ${P.openToWork ? `<span class="status"><span class="dot pulse"></span> Sẵn sàng cho cơ hội mới</span>` : ""}
+          ${P.openToWork ? `<span class="status"><span class="dot pulse"></span> ${txt("openToWork")}</span>` : ""}
         </div>
 
-        <p class="hero-hello"><span class="prompt">~/${esc(P.handle || "portfolio")}</span><span class="sigil">$</span>whoami</p>
+        <p class="hero-hello"><span class="prompt">~/${esc(P.handle || "portfolio")}</span><span class="sigil">$</span>${txt("heroCommand")}</p>
         <h1 class="hero-name" aria-label="${esc(P.name || "")}">
           <span aria-hidden="true" data-scramble>${esc(nameParts.slice(0, -1).join(" "))}</span>
           <span aria-hidden="true"><em data-scramble>${esc(last)}</em><i class="caret"></i></span>
@@ -172,14 +215,15 @@
 
         <div class="hero-lede">
           <div>
-            <p class="hero-statement"><em>${esc(P.role || "")}</em> ${esc(P.statement || "ở nơi thẩm mỹ gặp kỹ thuật: mỗi dòng code là một nét vẽ.")}</p>
+            <p class="hero-statement"><em>${esc(P.role || "")}</em> ${rich("statement")}</p>
             ${taglines.length ? `<span class="tagline" data-tagline>${esc(taglines[0])}</span>` : ""}
           </div>
           <div>
-            <p class="hero-bio">${esc(P.bio || "")}</p>
+            ${P.avatar ? `<div class="hero-id"><img class="avatar" src="${esc(img(P.avatar, 200))}" alt="${esc(P.name || "")}" /><div><b>${esc(P.name || "")}</b><span class="mono">@${esc(P.handle || "")}</span></div></div>` : ""}
+            <p class="hero-bio">${ed("P.bio", esc(P.bio || ""), { multi: true, ph: "Viết vài dòng giới thiệu..." })}</p>
             <div class="hero-actions">
-              <a href="#/projects" class="btn btn-primary">Xem dự án ${ARROW}</a>
-              <a href="#career" class="btn btn-outline" data-scroll>Lộ trình nghề nghiệp</a>
+              <a href="#/projects" class="btn btn-primary">${txt("ctaPrimary")} ${ARROW}</a>
+              <a href="#career" class="btn btn-outline" data-scroll>${txt("ctaSecondary")}</a>
             </div>
             <ul class="facts">
               ${facts.map(([k, v]) => `<li><span class="k">${k}</span>${v.startsWith("<a") ? v : `<span class="v">${v}</span>`}</li>`).join("")}
@@ -192,10 +236,10 @@
 
       <div class="wrap">
         <div class="stats">
-          ${stat(yearsCoding, "năm viết code", "+")}
-          ${stat((P.languages || []).length, "ngôn ngữ lập trình")}
-          ${stat(allSkills.length, "công nghệ & công cụ")}
-          ${stat(PROJECTS.length, "website đã xây dựng")}
+          ${stat(yearsCoding, txt("statYears"), "+")}
+          ${stat((P.languages || []).length, txt("statLanguages"))}
+          ${stat(allSkills.length, txt("statSkills"))}
+          ${stat(PROJECTS.length, txt("statProjects"))}
         </div>
       </div>
 
@@ -206,17 +250,16 @@
 
       ${
         featured.length
-          ? section("05", "Dự án nổi bật", "Một vài sản phẩm tiêu biểu mình đã thiết kế và phát triển.",
-              `<div class="project-grid">${featured.map(projectCard).join("")}</div>`,
-              `<a href="#/projects" class="section-link">Tất cả dự án ${ARROW}</a>`, "featured")
+          ? section("featuredTitle", "featuredDesc", projectGrid(featured, false),
+              `<a href="#/projects" class="section-link">${txt("featuredLink")} ${ARROW}</a>`, "featured")
           : ""
       }
 
       ${
         ALBUMS.length
-          ? section("06", "Ngoài giờ code", `${totalPhotos} khung hình từ ${totalAlbums} album, những nơi mình đã đi qua.`,
-              `<div class="album-grid">${ALBUMS.slice(0, 3).map((a) => albumCard(a, [a.id])).join("")}</div>`,
-              `<a href="#/albums" class="section-link">Xem album ${ARROW}</a>`)
+          ? section("albumsPreviewTitle", "albumsPreviewDesc",
+              `<div class="album-grid justified">${ALBUMS.slice(0, 4).map((a) => albumCard(a, [a.id], false)).join("")}</div>`,
+              `<a href="#/albums" class="section-link">${txt("albumsPreviewLink")} ${ARROW}</a>`, "albums")
           : ""
       }
     `;
@@ -236,14 +279,15 @@
     return `<div class="marquee" aria-hidden="true"><div class="mq-track"><div class="mq-row">${row}</div><div class="mq-row">${row}</div></div></div>`;
   }
 
-  const section = (num, title, desc, body, extra = "", id = "") => `
+  // Các mục tự đánh số theo thứ tự xuất hiện (mục trống thì bỏ qua); tiêu đề & mô tả lấy từ TEXTS
+  const section = (titleKey, descKey, body, extra = "", id = "") => `
     <section class="wrap section"${id ? ` id="${id}"` : ""}>
       <div class="section-grid">
         <div class="section-label">
-          <span class="section-num" aria-hidden="true">${num}</span>
-          <h2 class="section-title">${esc(title)}</h2>
+          <span class="section-num" aria-hidden="true">${pad2(++section.n)}</span>
+          <h2 class="section-title">${txt(titleKey)}</h2>
           ${id ? `<code class="section-code" aria-hidden="true">&lt;${esc(id)} /&gt;</code>` : ""}
-          ${desc ? `<p class="section-desc">${esc(desc)}</p>` : ""}
+          ${T[descKey] ? `<p class="section-desc">${txt(descKey)}</p>` : ""}
           ${extra}
         </div>
         <div class="section-body">${body}</div>
@@ -254,17 +298,17 @@
 
   function sectionLanguages() {
     const langs = P.languages || [];
-    if (!langs.length) return "";
+    if (!langs.length && !EDIT) return "";
     const spoken = (P.spokenLanguages || [])
-      .map((s) => `<span><b>${esc(s.name)}</b> · ${esc(s.level)}</span>`)
+      .map((s, i) => `<span${item("spokenLanguages", i)}><b>${esc(s.name)}</b> · ${esc(s.level)}</span>`)
       .join("");
     const body = `
-      <div class="lang-list">
+      <div class="lang-list"${list("languages")}>
         ${langs
-          .map((l) => {
+          .map((l, i) => {
             const lv = Math.max(1, Math.min(5, l.level || 1));
             return `
-          <div class="lang-row">
+          <div class="lang-row"${item("languages", i)}>
             <div>
               <div class="lang-name">${esc(l.name)}</div>
               ${l.note ? `<div class="lang-note">${esc(l.note)}</div>` : ""}
@@ -278,19 +322,19 @@
           })
           .join("")}
       </div>
-      ${spoken ? `<div class="spoken">${spoken}</div>` : ""}`;
-    return section("01", "Ngôn ngữ lập trình", "Mức độ tự đánh giá trên thang 5 và số năm sử dụng thực tế.", body, "", "languages");
+      ${spoken || EDIT ? `<div class="spoken"${list("spokenLanguages")}>${spoken}</div>` : ""}`;
+    return section("languagesTitle", "languagesDesc", body, "", "languages");
   }
 
   function sectionSkills() {
     const groups = P.skillGroups || [];
-    if (!groups.length) return "";
+    if (!groups.length && !EDIT) return "";
     const body = `
-      <div class="skill-groups">
+      <div class="skill-groups"${list("skillGroups")}>
         ${groups
           .map(
-            (g) => `
-          <div class="skill-group">
+            (g, i) => `
+          <div class="skill-group"${item("skillGroups", i)}>
             <div class="skill-group-head"><h3>${esc(g.title)}</h3><span class="count">${pad2((g.items || []).length)}</span></div>
             <ul class="skill-list">${(g.items || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
           </div>`
@@ -299,24 +343,24 @@
       </div>
       ${
         (P.learning || []).length
-          ? `<div class="learning"><span class="learning-label"><span class="dot pulse"></span> Đang học</span>${P.learning
+          ? `<div class="learning"><span class="learning-label"><span class="dot pulse"></span> ${txt("learningLabel")}</span>${P.learning
               .map((s) => `<span class="item">${esc(s)}</span>`)
               .join("")}</div>`
           : ""
       }`;
-    return section("02", "Kỹ năng & công nghệ", "Bộ công cụ mình dùng hằng ngày, chia theo từng mảng.", body, "", "skills");
+    return section("skillsTitle", "skillsDesc", body, "", "skills");
   }
 
   function sectionRoadmap() {
     const steps = P.roadmap || [];
-    if (!steps.length) return "";
+    if (!steps.length && !EDIT) return "";
     const label = { done: "Đã hoàn thành", current: "Hiện tại", next: "Mục tiêu" };
     const body = `
-      <ol class="roadmap" style="--n:${steps.length}">
+      <ol class="roadmap"${list("roadmap")}>
         ${steps
           .map(
-            (s) => `
-          <li class="road-step ${esc(s.status)}">
+            (s, i) => `
+          <li class="road-step ${esc(s.status)}"${item("roadmap", i)}>
             <div class="road-track"><span class="road-node"></span></div>
             <span class="road-status">${label[s.status] || ""}</span>
             <h3>${esc(s.title)}</h3>
@@ -325,19 +369,19 @@
           )
           .join("")}
       </ol>`;
-    return section("03", "Lộ trình nghề nghiệp", "Mình đang ở đâu và hướng tới đâu.", body, "", "career");
+    return section("roadmapTitle", "roadmapDesc", body, "", "career");
   }
 
   function sectionExperience() {
     const items = P.experience || [];
-    if (!items.length) return "";
+    if (!items.length && !EDIT) return "";
     const typeLabel = { work: "Công việc", education: "Học vấn", milestone: "Cột mốc" };
     const body = `
-      <div class="exp-list">
+      <div class="exp-list"${list("experience")}>
         ${items
           .map(
-            (e) => `
-          <article class="exp-item ${esc(e.type || "")}">
+            (e, i) => `
+          <article class="exp-item ${esc(e.type || "")}"${item("experience", i)}>
             <div class="exp-period">${esc(e.period || "")}<span class="exp-type">${typeLabel[e.type] || esc(e.type || "")}</span></div>
             <div>
               <h3>${esc(e.title)}</h3>
@@ -350,19 +394,19 @@
           )
           .join("")}
       </div>`;
-    return section("04", "Kinh nghiệm & học vấn", "Những nơi mình đã làm việc, học tập và các cột mốc đáng nhớ.", body, "", "experience");
+    return section("experienceTitle", "experienceDesc", body, "", "experience");
   }
 
   /* ---------------- Album ---------------- */
 
   const FOLDER_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
 
-  function albumCard(a, ids) {
+  function albumCard(a, ids, reorder = true) {
     const cover = coverOf(a);
     const subs = kids(a).length;
     const n = countPhotos(a);
     return `
-      <a class="album-card ${subs ? "is-folder" : ""}" href="${albumHref(ids)}">
+      <a class="album-card ${subs ? "is-folder" : ""}" href="${albumHref(ids)}"${ratioAttr(ratioOf(cover && findPhoto(a, cover)))}${item("album", a._id, reorder ? "" : " data-fixed")}>
         <div class="album-cover">
           ${cover ? `<img src="${esc(img(cover, 900))}" alt="${esc(a.title)}" loading="lazy" />` : ""}
           ${subs ? `<span class="album-badge">${FOLDER_ICON} ${subs} album</span>` : ""}
@@ -388,16 +432,21 @@
     return `<nav class="crumbs" aria-label="Đường dẫn album">${parts.join('<span class="sep">/</span>')}</nav>`;
   }
 
+  const albumGrid = (albums, ids, parentId) =>
+    albums.length || EDIT
+      ? `<div class="album-grid justified"${list("album", ` data-parent="${esc(parentId || "")}"`)}>${albums.map((c) => albumCard(c, [...ids, c.id])).join("")}</div>`
+      : "";
+
   function viewAlbums(ids) {
     if (!ids.length) {
       return `
         <section class="wrap page-head">
-          <span class="eyebrow">Album ảnh</span>
-          <h1 class="page-title">Những nơi <span class="serif">đã đi qua</span></h1>
+          <span class="eyebrow">${txt("albumsEyebrow")}</span>
+          <h1 class="page-title">${rich("albumsHeading")}</h1>
           <p class="page-meta">${pad2(totalAlbums)} album · ${totalPhotos} ảnh</p>
         </section>
         <div class="wrap page-body">
-          <div class="album-grid">${ALBUMS.map((a) => albumCard(a, [a.id])).join("") || empty("Chưa có album nào.")}</div>
+          ${ALBUMS.length || EDIT ? albumGrid(ALBUMS, [], "") : empty("Chưa có album nào.")}
         </div>`;
     }
 
@@ -409,23 +458,23 @@
     const parentHref = chain.length > 1 ? albumHref(ids.slice(0, -1)) : "#/albums";
 
     return `
-      <section class="wrap page-head">
+      <section class="wrap page-head"${item("album", a._id, " data-fixed data-here")}>
         ${breadcrumb(chain)}
-        <h1 class="page-title">${esc(a.title)}</h1>
+        <h1 class="page-title">${ed(`ALBUM.${a._id}.title`, esc(a.title))}</h1>
         <p class="page-meta">${[a.date && formatDate(a.date), subs.length && `${subs.length} album con`, `${countPhotos(a)} ảnh`].filter(Boolean).join(" · ")}</p>
-        ${a.description ? `<p class="page-desc">${esc(a.description)}</p>` : ""}
+        ${a.description || EDIT ? `<p class="page-desc">${ed(`ALBUM.${a._id}.description`, esc(a.description || ""), { multi: true, ph: "Thêm mô tả cho album..." })}</p>` : ""}
       </section>
       <div class="wrap page-body">
-        ${subs.length ? `<div class="album-grid">${subs.map((c) => albumCard(c, [...ids, c.id])).join("")}</div>` : ""}
+        ${albumGrid(subs, ids, a._id)}
         ${
-          photos.length
-            ? `${subs.length ? `<h2 class="sub-title">Ảnh tại ${esc(a.title)} <span class="faint mono" style="font-size:13px">${photos.length}</span></h2>` : ""}
-               <div class="masonry">
+          photos.length || EDIT
+            ? `${subs.length || EDIT ? `<h2 class="sub-title">Ảnh tại ${esc(a.title)} <span class="faint mono" style="font-size:13px">${photos.length}</span></h2>` : ""}
+               <div class="gallery justified"${list("photo", ` data-album="${esc(a._id)}"`)}>
                 ${photos
                   .map(
                     (ph, i) => `
-                  <button class="photo" data-path="${esc(ids.join("/"))}" data-index="${i}" aria-label="Xem ảnh ${i + 1}">
-                    <img src="${esc(img(ph.src, 900))}" alt="${esc(ph.caption || a.title)}" loading="lazy" />
+                  <button class="photo"${ratioAttr(ratioOf(ph))} data-path="${esc(ids.join("/"))}" data-index="${i}" aria-label="Xem ảnh ${i + 1}"${item("photo", `${a._id}:${i}`, a.cover === ph.src ? " data-cover" : "")}>
+                    <img src="${esc(img(ph.src, ratioOf(ph) > 1.6 ? 1400 : 900))}" alt="${esc(ph.caption || a.title)}" loading="lazy" />
                     ${ph.caption ? `<span class="photo-cap">${esc(ph.caption)}</span>` : ""}
                   </button>`
                   )
@@ -433,14 +482,14 @@
               </div>`
             : ""
         }
-        ${!subs.length && !photos.length ? empty("Album này chưa có ảnh.") : ""}
+        ${!subs.length && !photos.length && !EDIT ? empty("Album này chưa có ảnh.") : ""}
         <a href="${parentHref}" class="back">← Quay lại</a>
       </div>`;
   }
 
   /* ---------------- Dự án ---------------- */
 
-  function projectCard(p, i) {
+  function projectCard(p, i, reorder = true) {
     const title = String(p.title || "");
     const media = p.image
       ? `<img src="${esc(img(p.image, 1200))}" alt="${esc(title)}" loading="lazy" />`
@@ -451,7 +500,7 @@
       p.source && `<a href="${esc(p.source)}" target="_blank" rel="noopener">Mã nguồn ${ARROW_UP}</a>`,
     ].filter(Boolean).join("");
     return `
-      <article class="project-card" data-tags="${esc((p.tags || []).join("|"))}">
+      <article class="project-card" data-tags="${esc((p.tags || []).join("|"))}"${item("project", p._id, reorder ? "" : " data-fixed")}>
         ${href ? `<a class="project-media" href="${esc(href)}" target="_blank" rel="noopener">` : `<div class="project-media">`}
           ${media}
           <span class="project-index" aria-hidden="true">№${pad2(i + 1)}</span>
@@ -465,12 +514,18 @@
       </article>`;
   }
 
+  // Lưới tự điều chỉnh: 1 dự án → thẻ ngang to; số lẻ → thẻ cuối trải ngang
+  const projectGrid = (projects, reorder = true) =>
+    `<div class="project-grid ${projects.length === 1 ? "solo" : projects.length % 2 ? "odd" : ""}"${reorder ? list("project") : ""}>${projects
+      .map((p, i) => projectCard(p, i, reorder))
+      .join("")}</div>`;
+
   function viewProjects() {
     const tags = [...new Set(PROJECTS.flatMap((p) => p.tags || []))];
     return `
       <section class="wrap page-head">
-        <span class="eyebrow">Dự án</span>
-        <h1 class="page-title">Những website <span class="serif">mình đã xây</span></h1>
+        <span class="eyebrow">${txt("projectsEyebrow")}</span>
+        <h1 class="page-title">${rich("projectsHeading")}</h1>
         <p class="page-meta">${pad2(PROJECTS.length)} dự án</p>
         ${
           tags.length > 1
@@ -482,7 +537,71 @@
         }
       </section>
       <div class="wrap page-body">
-        <div class="project-grid">${PROJECTS.map(projectCard).join("") || empty("Chưa có dự án nào.")}</div>
+        ${PROJECTS.length || EDIT ? projectGrid(PROJECTS) : empty("Chưa có dự án nào.")}
+      </div>`;
+  }
+
+  /* ---------------- Thông tin cá nhân ---------------- */
+
+  function viewAbout() {
+    const nameParts = String(P.name || "").trim().split(/\s+/);
+    const initials = (nameParts[0]?.[0] || "") + (nameParts[nameParts.length - 1]?.[0] || "");
+    const current = (P.roadmap || []).find((r) => r.status === "current");
+    // Thẻ "profile.json" kiểu terminal
+    const rows = [
+      ["name", P.name],
+      ["handle", P.handle && `@${P.handle}`],
+      ["role", P.role],
+      ["now", current && current.title !== P.role ? current.title : ""],
+      ["location", P.location],
+      ["coding_since", P.startedCoding],
+      ["open_to_work", !!P.openToWork],
+    ].filter(([, v]) => v !== "" && v !== undefined && v !== null);
+    const json = rows
+      .map(([k, v], i) => {
+        const val = typeof v === "string" ? `<span class="j-str">"${esc(v)}"</span>` : `<span class="j-lit">${esc(String(v))}</span>`;
+        return `  <span class="j-key">"${k}"</span>: ${val}${i < rows.length - 1 ? "," : ""}`;
+      })
+      .join("\n");
+    const linkLabel = (k, v) => (k === "email" ? v : String(v).replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""));
+    const linkHref = (k, v) => (k === "email" ? `mailto:${v}` : v);
+    const linkRows = Object.entries(links)
+      .filter(([, v]) => v)
+      .sort(([a], [b]) => (a === "email" ? -1 : b === "email" ? 1 : 0))
+      .map(
+        ([k, v]) => `<li><a href="${esc(linkHref(k, v))}"${k === "email" ? "" : ' target="_blank" rel="noopener"'}>
+          <span class="k mono">${esc(k)}</span><span class="v">${esc(linkLabel(k, v))}</span>${ARROW_UP}</a></li>`
+      )
+      .join("");
+    const chips = (arr) => arr.map((s) => `<span>${esc(s)}</span>`).join("");
+    const block = (key, body) => (body ? `<div class="about-block"><h3 class="about-h">${txt(key)}</h3>${body}</div>` : "");
+
+    return `
+      <section class="wrap page-head">
+        <span class="eyebrow">${txt("aboutEyebrow")}</span>
+        <h1 class="page-title">${rich("aboutHeading")}</h1>
+      </section>
+      <div class="wrap page-body about"${item("profile", "me")}>
+        <aside class="about-side">
+          <figure class="about-photo">
+            ${P.avatar ? `<img src="${esc(img(P.avatar, 900))}" alt="${esc(P.name || "")}" />` : `<span class="about-initials">${esc(initials)}</span>`}
+            <figcaption class="mono">${esc(P.handle ? `@${P.handle}` : P.name || "")}</figcaption>
+          </figure>
+          <div class="term" aria-label="Thông tin tóm tắt">
+            <div class="term-bar"><i></i><i></i><i></i><span class="mono">~/${esc(P.handle || "me")}/profile.json</span></div>
+            <pre class="term-body mono">{\n${json}\n}</pre>
+          </div>
+        </aside>
+        <div class="about-main">
+          <p class="about-lede">${ed("P.bio", esc(P.bio || ""), { multi: true, ph: "Viết vài dòng giới thiệu..." })}</p>
+          ${P.about || EDIT ? `<div class="about-text">${ed("P.about", esc(P.about || "").replace(/\n/g, "<br/>"), { multi: true, ph: "Kể thêm về bản thân: con đường đến với code, điều bạn quan tâm..." })}</div>` : ""}
+          ${block("aboutContact", linkRows && `<ul class="about-links">${linkRows}</ul>`)}
+          <div class="about-grid">
+            ${block("aboutInterests", (P.interests || []).length && `<div class="chips">${chips(P.interests)}</div>`)}
+            ${block("aboutLanguages", (P.spokenLanguages || []).length && `<ul class="about-list">${P.spokenLanguages.map((l) => `<li><b>${esc(l.name)}</b><span>${esc(l.level)}</span></li>`).join("")}</ul>`)}
+            ${block("aboutLearning", (P.learning || []).length && `<div class="chips dashed">${chips(P.learning)}</div>`)}
+          </div>
+        </div>
       </div>`;
   }
 
@@ -497,14 +616,16 @@
 
   /* ---------------- Router ---------------- */
 
-  function route() {
+  function route(keepScroll = false) {
     const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
     let html, tab;
     if (parts.length === 0) [html, tab] = [viewOverview(), "overview"];
+    else if (parts[0] === "about") [html, tab] = [viewAbout(), "about"];
     else if (parts[0] === "albums") [html, tab] = [viewAlbums(parts.slice(1)), "albums"];
     else if (parts[0] === "projects") [html, tab] = [viewProjects(), "projects"];
     else [html, tab] = [viewNotFound(), null];
 
+    const y = scrollY;
     app.innerHTML = `<div class="view">${html}</div>`;
     document.querySelectorAll(".nav a").forEach((a) => {
       const on = a.dataset.tab === tab;
@@ -513,9 +634,10 @@
       else a.removeAttribute("aria-current");
     });
     document.documentElement.style.scrollBehavior = "auto";
-    window.scrollTo(0, 0);
+    window.scrollTo(0, keepScroll === true ? y : 0);
     document.documentElement.style.scrollBehavior = "";
     afterRender(tab);
+    document.dispatchEvent(new CustomEvent("portfolio:render"));
   }
 
   let taglineTimer = null;
@@ -525,7 +647,7 @@
     clearInterval(taglineTimer);
     const el = app.querySelector("[data-tagline]");
     const list = P.taglines || [];
-    if (!el || reduceMotion || list.length < 2) return;
+    if (!el || reduceMotion || EDIT || list.length < 2) return;
     let i = 0;
     taglineTimer = setInterval(() => {
       el.classList.add("out");
@@ -634,7 +756,7 @@
         .map((c, i) => {
           if (c === " " || frame >= 10 + i * 3) return c;
           done = false;
-          return frame < 0 ? " " : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+          return frame < 0 ? " " : GLYPHS[(Math.random() * GLYPHS.length) | 0];
         })
         .join("");
       if (!done) raf = requestAnimationFrame(tick);
@@ -651,7 +773,7 @@
     const canvas = app.querySelector(".hero-field");
     if (!canvas) return (stopHero = () => {});
     const stops = [heroField(canvas)];
-    if (!reduceMotion) app.querySelectorAll("[data-scramble]").forEach((el, i) => stops.push(scramble(el, i * 260)));
+    if (!reduceMotion && !EDIT) app.querySelectorAll("[data-scramble]").forEach((el, i) => stops.push(scramble(el, i * 260)));
 
     const clock = app.querySelector("[data-clock]");
     const fmt = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -664,9 +786,11 @@
   }
 
   function afterRender(tab) {
-    if (tab === "overview") countUp();
     rotateTaglines();
     startHero();
+    // Khi chỉnh sửa, trang vẽ lại liên tục nên bỏ hiệu ứng hiện dần
+    if (EDIT) return app.querySelectorAll(".sig-draw").forEach((el) => el.classList.add("in"));
+    if (tab === "overview") countUp();
     const io = new IntersectionObserver(
       (entries) =>
         entries.forEach((e) => {
@@ -704,6 +828,8 @@
   /* ---------------- Click trong trang ---------------- */
 
   app.addEventListener("click", (e) => {
+    // Đang chỉnh sửa: bấm vào chữ để sửa, không mở link / lightbox
+    if (EDIT && e.target.closest("[data-edit], .ed-tools, .ed-add, .ed-drop")) return;
     // Cuộn tới mục trong trang (không đổi hash để router không chạy lại)
     const jump = e.target.closest("[data-scroll]");
     if (jump) {
@@ -790,7 +916,18 @@
 
   /* ---------------- Khởi động ---------------- */
 
+  // Cho lớp chỉnh sửa (admin.js) đọc & sửa dữ liệu rồi vẽ lại trang
+  window.Portfolio = {
+    P, ALBUMS, PROJECTS, T: () => T, kids, photoOf, ownPhotos,
+    refresh() {
+      derive();
+      renderFooter();
+      route(true);
+    },
+  };
+
   renderFooter();
-  addEventListener("hashchange", route);
+  addEventListener("hashchange", () => route());
   route();
+  document.dispatchEvent(new CustomEvent("portfolio:ready"));
 })();

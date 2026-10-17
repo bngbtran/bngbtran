@@ -3,49 +3,87 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chỉnh sửa — Portfolio</title>
   <meta name="robots" content="noindex" />
-  <title>Quản trị — Portfolio</title>
-  <meta name="theme-color" content="#eef1ec" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#090d0c" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#090d0c" />
   <script>
+    // Áp theme trước khi vẽ trang để tránh nháy màu
     try {
       const t = localStorage.getItem("theme");
       if (t) document.documentElement.dataset.theme = t;
     } catch (_) {}
+    // Bật chế độ chỉnh sửa: dùng chung giao diện với trang chính (app.js)
+    window.EDIT_MODE = true;
+    document.documentElement.classList.add("edit-mode");
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@1,9..144,400..500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/style.css" />
   <link rel="stylesheet" href="assets/css/admin.css" />
+  <!-- Chữ ký trắng viền tối: nhìn rõ trên mọi màu thanh tab (sáng, tối, theme tùy chỉnh) -->
   <link rel="icon" href="images/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="images/brand/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="images/brand/favicon-64.png" type="image/png" sizes="64x64" />
+  <link rel="apple-touch-icon" href="images/brand/apple-touch-icon.png" />
 </head>
 <body>
-  
-
-  <header class="topbar">
-    <a href="index.html" class="brand" aria-label="Về trang chính">
-      <span class="logo-mark" aria-hidden="true">BT</span>
-      <span class="brand-name">admin</span>
-    </a>
-    <nav class="tabs admin-tabs" id="admin-tabs" hidden>
-      <button class="tab" data-tab="albums">Album</button>
-      <button class="tab" data-tab="projects">Dự án</button>
-      <button class="tab" data-tab="profile">Hồ sơ</button>
-      <button class="tab" data-tab="tools">Công cụ</button>
-    </nav>
-    <div class="admin-user mono" id="admin-user"></div>
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <a href="#/" class="logo" aria-label="Bùi Trân — Trang chủ"><span class="sig logo-sig" aria-hidden="true"></span></a>
+      <nav class="nav" aria-label="Điều hướng chính">
+        <a href="#/" data-tab="overview">Tổng quan</a>
+        <a href="#/about" data-tab="about"><span class="nav-long">Thông tin cá nhân</span><span class="nav-short">Cá nhân</span></a>
+        <a href="#/albums" data-tab="albums">Album</a>
+        <a href="#/projects" data-tab="projects">Dự án</a>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="theme-toggle" aria-label="Đổi giao diện sáng/tối">
+          <svg class="i-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        </button>
+        <a class="btn btn-outline btn-sm" id="header-admin" href="admin.html" title="Đăng nhập để chỉnh sửa"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg> Quản trị</a>
+      </div>
+    </div>
   </header>
 
-  <main id="admin" class="admin-main">
-    <div class="loading mono"><span class="dot"></span> đang khởi động...</div>
-  </main>
+  <main id="app" tabindex="-1"></main>
 
-  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <footer class="site-footer" id="site-footer"></footer>
+
+  <!-- Lightbox xem ảnh -->
+  <div class="lightbox" id="lightbox" hidden>
+    <div class="lb-top mono"><span id="lb-count"></span><button class="lb-btn" data-lb="close" aria-label="Đóng">Đóng ✕</button></div>
+    <button class="lb-nav lb-prev" data-lb="prev" aria-label="Ảnh trước">←</button>
+    <figure class="lb-figure">
+      <img id="lb-img" alt="" />
+      <figcaption id="lb-caption"></figcaption>
+    </figure>
+    <button class="lb-nav lb-next" data-lb="next" aria-label="Ảnh sau">→</button>
+  </div>
+
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
 
   <script src="assets/js/config.js"></script>
   <script src="assets/js/data.js"></script>
   <script src="assets/js/store.js"></script>
+  <script src="assets/js/app.js"></script>
   <script type="module" src="assets/js/admin.js"></script>
+  <script>
+    // Nếu lớp chỉnh sửa không chạy được thì báo lý do thay vì im lặng
+    (function () {
+      function fail(msg) {
+        var d = document.getElementById("ed-dock") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "ed-dock", className: "ed-dock" }));
+        d.innerHTML = "<span>" + msg + "</span>";
+      }
+      if (location.protocol === "file:")
+        return fail('Trang đang mở trực tiếp từ file nên không đăng nhập được. Chạy <code>npx serve .</code> rồi mở <code>http://localhost:3000/admin</code>.');
+      setTimeout(function () {
+        var d = document.getElementById("ed-dock");
+        if (!d || /đang kết nối/.test(d.textContent))
+          fail("Không tải được thư viện Firebase. Kiểm tra mạng, hoặc tắt tiện ích chặn quảng cáo / chặn script cho trang này (cần <code>gstatic.com</code> và <code>googleapis.com</code>), rồi tải lại trang.");
+      }, 10000);
+    })();
+  </script>
 </body>
 </html>
