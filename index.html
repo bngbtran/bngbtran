@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bùi Trân — Portfolio</title>
   <meta name="description" content="Portfolio của Bùi Ngọc Bảo Trân: chuyên môn lập trình web, dự án và album ảnh." />
-  <meta name="theme-color" content="#0a0d12" />
+  <meta name="theme-color" content="#eef1ec" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#090d0c" media="(prefers-color-scheme: dark)" />
   <script>
     // Áp theme trước khi vẽ trang để tránh nháy màu
     try {
@@ -15,16 +16,14 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@1,400;1,500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/style.css" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0d12'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='system-ui,Segoe UI,Arial' font-size='34' font-weight='700' fill='%23edf1f5'%3EB%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="images/brand/favicon.svg" type="image/svg+xml" />
 </head>
 <body>
   <header class="site-header" id="site-header">
     <div class="header-inner">
-      <!-- LOGO TẠM: khi có logo thật, đặt file vào assets/brand/ rồi thay 2 thẻ span bên dưới bằng
-           <img class="logo-img" src="assets/brand/logo.svg" alt="Bùi Trân" /> -->
-      <a href="#/" class="logo" aria-label="Bùi Trân — Trang chủ"><span class="logo-mark" aria-hidden="true">BT</span><span class="logo-name">Bùi Trân</span></a>
+      <a href="#/" class="logo" aria-label="Bùi Trân — Trang chủ"><span class="sig logo-sig" aria-hidden="true"></span></a>
       <nav class="nav" aria-label="Điều hướng chính">
         <a href="#/" data-tab="overview">Tổng quan</a>
         <a href="#/albums" data-tab="albums">Album</a>
@@ -54,6 +53,8 @@
     </figure>
     <button class="lb-nav lb-next" data-lb="next" aria-label="Ảnh sau">→</button>
   </div>
+
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
 
   <script src="assets/js/config.js"></script>
   <script src="assets/js/data.js"></script>

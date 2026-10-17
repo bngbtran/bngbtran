@@ -73,6 +73,29 @@
         localStorage.setItem("theme", next);
       } catch (_) {}
     });
+
+    setupCursor();
+  }
+
+  // Giọt mực đi theo chuột, phình ra khi trỏ vào thứ bấm được
+  function setupCursor() {
+    const dot = document.getElementById("cursor");
+    if (!dot || reduceMotion || !matchMedia("(pointer: fine)").matches) return;
+    let x = -100, y = -100, cx = x, cy = y;
+    addEventListener("pointermove", (e) => {
+      x = e.clientX;
+      y = e.clientY;
+      dot.classList.add("on");
+      dot.classList.toggle("big", !!e.target.closest("a, button, .photo"));
+    }, { passive: true });
+    document.addEventListener("pointerleave", () => dot.classList.remove("on"));
+    const tick = () => {
+      cx += (x - cx) * 0.2;
+      cy += (y - cy) * 0.2;
+      dot.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   function renderFooter() {
@@ -87,11 +110,24 @@
           <h2 style="margin-top:18px">Cùng tạo nên<br/>điều gì đó <span class="serif">thật tốt.</span></h2>
           ${links.email ? `<a class="footer-mail" href="mailto:${esc(links.email)}">${esc(links.email)} ${ARROW_UP}</a>` : ""}
         </div>
+        <div class="footer-sign sig-draw" aria-hidden="true">
+          <span class="footer-regards">Thân ái,</span>
+          <span class="sig"></span>
+          <span class="footer-stamp">Bảo<br/>Trân</span>
+        </div>
       </div>
       <div class="wrap footer-bottom">
         <span>© ${new Date().getFullYear()} ${esc(P.name || "")}</span>
+        <span class="serif">Viết tay & code tay tại ${esc(P.location || "Việt Nam")}</span>
         <nav class="footer-links">${social}</nav>
       </div>`;
+    const sign = document.querySelector("#site-footer .sig-draw");
+    new IntersectionObserver((entries, obs) => {
+      if (entries[0].isIntersecting) {
+        sign.classList.add("in");
+        obs.disconnect();
+      }
+    }, { threshold: 0.5 }).observe(sign);
     const contact = document.getElementById("header-contact");
     if (links.email) contact.href = `mailto:${links.email}`;
     else contact.hidden = true;
@@ -103,7 +139,10 @@
     const current = (P.roadmap || []).find((r) => r.status === "current");
     const featured = PROJECTS.filter((p) => p.featured);
     const nameParts = String(P.name || "").trim().split(/\s+/);
-    const last = nameParts.pop() || "";
+    const last = nameParts[nameParts.length - 1] || "";
+    const year = new Date().getFullYear();
+    const ring = `${P.role || "Portfolio"} ✦ ${P.openToWork ? "Sẵn sàng cho cơ hội mới" : `Portfolio ${year}`} ✦ `;
+    const taglines = P.taglines || [];
     const facts = [
       ["Vị trí", esc(P.role || "")],
       current && current.title !== P.role && ["Hiện tại", esc(current.title)],
@@ -114,26 +153,42 @@
 
     return `
       <section class="wrap hero">
-        <div class="hero-top">
-          <span class="eyebrow">Portfolio · ${new Date().getFullYear()}</span>
+        <canvas class="hero-field" aria-hidden="true"></canvas>
+        <div class="hero-meta">
+          <span>Portfolio · №${year}</span>
+          <span>${esc(P.location || "Việt Nam")} · GMT+7 · <span class="clock" data-clock>--:--:--</span></span>
           ${P.openToWork ? `<span class="status"><span class="dot pulse"></span> Sẵn sàng cho cơ hội mới</span>` : ""}
         </div>
-        <h1 class="hero-name">${esc(nameParts.join(" "))} <span class="serif">${esc(last)}</span></h1>
-        <p class="hero-role"><strong>${esc(P.role || "")}</strong>${P.taglines && P.taglines[0] ? ` — ${esc(P.taglines[0])}` : ""}</p>
 
-        <div class="hero-bottom">
+        <p class="hero-hello"><span class="prompt">~/${esc(P.handle || "portfolio")}</span><span class="sigil">$</span>whoami</p>
+        <h1 class="hero-name" aria-label="${esc(P.name || "")}">
+          <span aria-hidden="true" data-scramble>${esc(nameParts.slice(0, -1).join(" "))}</span>
+          <span aria-hidden="true"><em data-scramble>${esc(last)}</em><i class="caret"></i></span>
+        </h1>
+        <div class="seal" aria-hidden="true">
+          <svg class="seal-ring" viewBox="0 0 200 200"><defs><path id="seal-path" d="M100,100 m-80,0 a80,80 0 1,1 160,0 a80,80 0 1,1 -160,0"/></defs><text><textPath href="#seal-path" textLength="498" lengthAdjust="spacing">${esc(ring)}</textPath></text></svg>
+          <span class="seal-core">BT</span>
+        </div>
+
+        <div class="hero-lede">
+          <div>
+            <p class="hero-statement"><em>${esc(P.role || "")}</em> ${esc(P.statement || "ở nơi thẩm mỹ gặp kỹ thuật: mỗi dòng code là một nét vẽ.")}</p>
+            ${taglines.length ? `<span class="tagline" data-tagline>${esc(taglines[0])}</span>` : ""}
+          </div>
           <div>
             <p class="hero-bio">${esc(P.bio || "")}</p>
             <div class="hero-actions">
               <a href="#/projects" class="btn btn-primary">Xem dự án ${ARROW}</a>
               <a href="#career" class="btn btn-outline" data-scroll>Lộ trình nghề nghiệp</a>
             </div>
+            <ul class="facts">
+              ${facts.map(([k, v]) => `<li><span class="k">${k}</span>${v.startsWith("<a") ? v : `<span class="v">${v}</span>`}</li>`).join("")}
+            </ul>
           </div>
-          <ul class="facts">
-            ${facts.map(([k, v]) => `<li><span class="k">${k}</span>${v.startsWith("<a") ? v : `<span class="v">${v}</span>`}</li>`).join("")}
-          </ul>
         </div>
       </section>
+
+      ${marquee([...(P.languages || []).map((l) => l.name), ...allSkills])}
 
       <div class="wrap">
         <div class="stats">
@@ -168,16 +223,26 @@
   }
 
   const stat = (n, label, sup = "") =>
-    `<div class="stat"><span class="stat-num"><span data-count="${n}">${n}</span>${sup ? `<sup>${sup}</sup>` : ""}</span><span class="stat-label">${label}</span></div>`;
+    !n ? "" : `<div class="stat"><span class="stat-num"><span data-count="${n}">${n}</span>${sup ? `<sup>${sup}</sup>` : ""}</span><span class="stat-label">${label}</span></div>`;
 
   const empty = (msg) => `<p class="empty">${msg}</p>`;
+
+  // Dải chữ chạy ngang, lặp 2 lần để cuộn liền mạch
+  function marquee(items) {
+    if (!items.length) return "";
+    const row = items
+      .map((s, i) => `<span class="mq-item${i % 2 ? " alt" : ""}">${esc(s)}</span><span class="mq-star">✳</span>`)
+      .join("");
+    return `<div class="marquee" aria-hidden="true"><div class="mq-track"><div class="mq-row">${row}</div><div class="mq-row">${row}</div></div></div>`;
+  }
 
   const section = (num, title, desc, body, extra = "", id = "") => `
     <section class="wrap section"${id ? ` id="${id}"` : ""}>
       <div class="section-grid">
         <div class="section-label">
-          <span class="section-num">${num} /</span>
+          <span class="section-num" aria-hidden="true">${num}</span>
           <h2 class="section-title">${esc(title)}</h2>
+          ${id ? `<code class="section-code" aria-hidden="true">&lt;${esc(id)} /&gt;</code>` : ""}
           ${desc ? `<p class="section-desc">${esc(desc)}</p>` : ""}
           ${extra}
         </div>
@@ -205,7 +270,7 @@
               ${l.note ? `<div class="lang-note">${esc(l.note)}</div>` : ""}
             </div>
             <div class="meter" role="img" aria-label="Mức độ ${lv}/5">
-              ${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= lv ? "on" : ""}" style="--i:${i}"></i>`).join("")}
+              ${[1, 2, 3, 4, 5].map((i) => `<i class="${i < lv ? "on" : i === lv ? "on peak" : ""}"></i>`).join("")}
             </div>
             <div class="lang-level">${LEVELS[lv]}</div>
             <div class="lang-years">${l.years ? `${esc(l.years)} năm` : ""}</div>
@@ -389,12 +454,12 @@
       <article class="project-card" data-tags="${esc((p.tags || []).join("|"))}">
         ${href ? `<a class="project-media" href="${esc(href)}" target="_blank" rel="noopener">` : `<div class="project-media">`}
           ${media}
-          <span class="project-index">${pad2(i + 1)}</span>
+          <span class="project-index" aria-hidden="true">№${pad2(i + 1)}</span>
         ${href ? "</a>" : "</div>"}
         <div class="project-body">
           <div class="project-head"><h3>${esc(title)}</h3><span class="project-year">${esc(p.year || "")}</span></div>
           <p>${esc(p.description || "")}</p>
-          ${(p.tags || []).length ? `<div class="tech">${p.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
+          ${(p.tags || []).length ? `<div class="tech" data-label="Chất liệu">${p.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
           ${links ? `<div class="project-links">${links}</div>` : ""}
         </div>
       </article>`;
@@ -453,8 +518,155 @@
     afterRender(tab);
   }
 
+  let taglineTimer = null;
+
+  // Đổi luân phiên các tagline dưới câu giới thiệu
+  function rotateTaglines() {
+    clearInterval(taglineTimer);
+    const el = app.querySelector("[data-tagline]");
+    const list = P.taglines || [];
+    if (!el || reduceMotion || list.length < 2) return;
+    let i = 0;
+    taglineTimer = setInterval(() => {
+      el.classList.add("out");
+      setTimeout(() => {
+        i = (i + 1) % list.length;
+        el.textContent = list[i];
+        el.classList.remove("out");
+      }, 400);
+    }, 4200);
+  }
+
+  /* ---------------- Hero: trường ký tự, giải mã tên, đồng hồ ---------------- */
+
+  let stopHero = () => {};
+
+  const hexRgb = (hex) => {
+    const h = hex.trim().replace("#", "");
+    const n = parseInt(h.length === 3 ? h.replace(/./g, "$&$&") : h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+
+  // Lưới ký tự gợn sóng theo thời gian, phình sáng quanh con trỏ; màu chuyển từ accent sang accent-2
+  function heroField(canvas) {
+    const ctx = canvas.getContext("2d");
+    const RAMP = " ·:-+=*≡#%@";
+    const CELL = 18;
+    let w = 0, h = 0, cols = 0, rows = 0, mx = -1e4, my = -1e4, raf = 0, palette = [], frame = 0;
+
+    const readColors = () => {
+      const css = getComputedStyle(document.documentElement);
+      const a = hexRgb(css.getPropertyValue("--accent")), b = hexRgb(css.getPropertyValue("--accent-2"));
+      palette = Array.from({ length: cols }, (_, i) => {
+        const k = cols > 1 ? i / (cols - 1) : 0;
+        return `rgb(${a.map((v, j) => Math.round(v + (b[j] - v) * k)).join(",")})`;
+      });
+    };
+    const resize = () => {
+      const r = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      w = r.width; h = r.height;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.font = `500 13px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      cols = Math.ceil(w / CELL); rows = Math.ceil(h / CELL);
+      readColors();
+    };
+    const draw = (t) => {
+      if (++frame % 60 === 0) readColors(); // bắt kịp khi đổi theme
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < cols; i++) {
+        ctx.fillStyle = palette[i];
+        for (let j = 0; j < rows; j++) {
+          const x = (i + 0.5) * CELL, y = (j + 0.5) * CELL;
+          const n = Math.sin(i * 0.16 + t * 0.0005) + Math.sin(j * 0.21 - t * 0.0007) + Math.sin((i + j) * 0.08 + t * 0.0003);
+          const d = Math.hypot(x - mx, y - my);
+          const v = ((n + 3) / 6) * 0.78 + Math.max(0, 1 - d / 190) * 0.75;
+          if (v < 0.26) continue;
+          ctx.globalAlpha = Math.min(1, (v - 0.18) * 1.5);
+          ctx.fillText(RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))], x, y);
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+    const loop = (t) => {
+      draw(t);
+      raf = requestAnimationFrame(loop);
+    };
+    const onMove = (e) => {
+      const r = canvas.getBoundingClientRect();
+      mx = e.clientX - r.left;
+      my = e.clientY - r.top;
+    };
+
+    resize();
+    addEventListener("resize", resize);
+    if (reduceMotion) draw(0);
+    else {
+      addEventListener("pointermove", onMove, { passive: true });
+      // chỉ chạy khi hero còn trong khung nhìn
+      const io = new IntersectionObserver(([e]) => {
+        cancelAnimationFrame(raf);
+        if (e.isIntersecting) raf = requestAnimationFrame(loop);
+      });
+      io.observe(canvas);
+      return () => {
+        io.disconnect();
+        cancelAnimationFrame(raf);
+        removeEventListener("pointermove", onMove);
+        removeEventListener("resize", resize);
+      };
+    }
+    return () => removeEventListener("resize", resize);
+  }
+
+  // Chữ hiện ra như đang được giải mã
+  function scramble(el, delay = 0) {
+    const text = el.textContent;
+    const GLYPHS = "01<>/{}[]=+*#_~";
+    let frame = -Math.round(delay / 16), raf = 0;
+    const tick = () => {
+      frame++;
+      let done = true;
+      el.textContent = [...text]
+        .map((c, i) => {
+          if (c === " " || frame >= 10 + i * 3) return c;
+          done = false;
+          return frame < 0 ? " " : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+        })
+        .join("");
+      if (!done) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.textContent = text;
+    };
+  }
+
+  function startHero() {
+    stopHero();
+    const canvas = app.querySelector(".hero-field");
+    if (!canvas) return (stopHero = () => {});
+    const stops = [heroField(canvas)];
+    if (!reduceMotion) app.querySelectorAll("[data-scramble]").forEach((el, i) => stops.push(scramble(el, i * 260)));
+
+    const clock = app.querySelector("[data-clock]");
+    const fmt = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    const tickClock = () => (clock.textContent = fmt.format(new Date()));
+    tickClock();
+    const timer = setInterval(tickClock, 1000);
+    stops.push(() => clearInterval(timer));
+
+    stopHero = () => stops.forEach((s) => s());
+  }
+
   function afterRender(tab) {
     if (tab === "overview") countUp();
+    rotateTaglines();
+    startHero();
     const io = new IntersectionObserver(
       (entries) =>
         entries.forEach((e) => {
@@ -472,6 +684,7 @@
         el.style.transitionDelay = `${(i % 4) * 70}ms`;
         io.observe(el);
       });
+    app.querySelectorAll(".sig-draw").forEach((el) => io.observe(el));
   }
 
   function countUp() {
