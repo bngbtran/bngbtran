@@ -51,7 +51,7 @@ và trang chính chỉ tải bản thu nhỏ vừa khung hiển thị, nên 25 c
 
 ### Bước 3: Đưa dữ liệu lên
 
-1. Chạy `npx serve .`, mở `http://localhost:3000/admin.html`, đăng nhập bằng Google (đúng email trong `ADMIN_EMAIL`).
+1. Chạy `npx serve .`, mở `http://localhost:3000/admin.html`, đăng nhập bằng Google (một trong các email trong `ADMIN_EMAILS`).
 2. Vào tab **Công cụ → Nhập dữ liệu** để đẩy toàn bộ nội dung đang có trong `data.js` lên Firestore.
 3. Từ giờ mọi thay đổi đều làm trong trang admin. File `data.js` chỉ còn là dữ liệu dự phòng
    (trang chính sẽ dùng nó nếu không kết nối được Firestore).

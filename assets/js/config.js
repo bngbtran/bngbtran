@@ -21,5 +21,5 @@ const CLOUDINARY = {
   folder: "portfolio",  // thư mục gốc chứa ảnh trên Cloudinary
 };
 
-// Chỉ email này đăng nhập được trang quản trị (phải khớp với firestore.rules)
-const ADMIN_EMAIL = "tranbnb.2004@gmail.com";
+// Các email được quản trị (phải khớp với danh sách trong firestore.rules)
+const ADMIN_EMAILS = ["tranbnb.2004@gmail.com", "buitran20042003@gmail.com"];
