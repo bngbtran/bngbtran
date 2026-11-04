@@ -23,7 +23,7 @@ if (Store.online() && !window.EDIT_MODE) {
     const data = Store.shape(raw.profile, raw.albums, raw.projects);
     const key = stable(data);
     const pf = window.Portfolio;
-    if (last === null) last = stable({ PROFILE: pf.P, ALBUMS: pf.ALBUMS, PROJECTS: pf.PROJECTS });
+    if (last === null) last = stable({ PROFILE: pf.P, ALBUMS: pf.ALBUMS, PROJECTS: pf.PROJECTS, COURSES: pf.COURSES });
     if (key === last) return;
     last = key;
     Store.saveCache(data);
@@ -35,4 +35,11 @@ if (Store.online() && !window.EDIT_MODE) {
   onSnapshot(doc(db, "site", "profile"), (s) => ((raw.profile = s.exists() ? s.data() : null), push()), fail);
   onSnapshot(collection(db, "albums"), (s) => ((raw.albums = docs(s)), push()), fail);
   onSnapshot(collection(db, "projects"), (s) => ((raw.projects = docs(s)), push()), fail);
+
+  // GitHub không báo thay đổi được cho trang: tự hỏi lại mỗi phút (và khi quay lại tab)
+  const pollGithub = async () => {
+    if (!document.hidden && (await Store.loadStudyRepos())) push();
+  };
+  setInterval(pollGithub, 60000);
+  document.addEventListener("visibilitychange", pollGithub);
 }

@@ -334,7 +334,7 @@ const ADD_LABEL = {
   skillGroups: "+ Thêm nhóm kỹ năng",
   roadmap: "+ Thêm chặng",
   experience: "+ Thêm kinh nghiệm / học vấn",
-  project: "+ Thêm dự án",
+  press: "+ Thêm bài báo",
   album: "+ Thêm album",
 };
 
@@ -489,7 +489,7 @@ document.addEventListener(
    CÁC LOẠI MỤC: trường dữ liệu trong bảng sửa
    ========================================================= */
 
-const LEVEL_OPTS = [[1, "1 · Mới học"], [2, "2 · Cơ bản"], [3, "3 · Thành thạo vừa"], [4, "4 · Thành thạo"], [5, "5 · Chuyên sâu"]];
+const LEVEL_OPTS = [["", "Không hiện mức độ"], [1, "1 · Mới học"], [2, "2 · Cơ bản"], [3, "3 · Trung bình"], [4, "4 · Thành thạo"], [5, "5 · Chuyên sâu"]];
 
 const SCHEMA = {
   languages: { title: "Ngôn ngữ lập trình", fields: [
@@ -519,16 +519,26 @@ const SCHEMA = {
     { k: "description", label: "Mô tả", type: "textarea", full: true },
     { k: "highlights", label: "Điểm nổi bật", hint: "(mỗi dòng 1 ý)", type: "lines", full: true },
     { k: "tech", label: "Công nghệ", hint: "(phân cách bằng dấu phẩy)", type: "csv", full: true },
+    { k: "links", label: "Link minh chứng", hint: "(mỗi dòng “tên: đường dẫn”)", type: "kv", full: true },
   ] },
+  press: { title: "Bài báo", fields: [
+    { k: "title", label: "Tiêu đề bài", full: true },
+    { k: "source", label: "Nguồn", placeholder: "Trường Đại học FPT" },
+    { k: "date", label: "Thời gian", placeholder: "05/2025" },
+    { k: "url", label: "Đường dẫn", type: "url", full: true, placeholder: "https://..." },
+  ] },
+  course: { title: "Môn học", fields: [
+    { k: "title", label: "Tên môn", full: true },
+    { k: "intro", label: "Giới thiệu", hint: "(chỉ dùng khi Description trên GitHub để trống)", type: "textarea", rows: 3, full: true },
+  ] },
+  // Link website, mã nguồn và năm luôn lấy từ GitHub nên không có ô sửa ở đây
   project: { title: "Dự án", fields: [
     { k: "title", label: "Tên dự án", full: true },
-    { k: "year", label: "Năm", type: "number" },
-    { k: "featured", label: "Hiện ở “Dự án nổi bật”", type: "check" },
-    { k: "description", label: "Mô tả", type: "textarea", rows: 3, full: true },
-    { k: "tags", label: "Công nghệ", hint: "(phân cách bằng dấu phẩy)", type: "csv", full: true, placeholder: "React, TypeScript" },
-    { k: "demo", label: "Link website", type: "url", full: true, placeholder: "https://..." },
-    { k: "source", label: "Link mã nguồn", type: "url", full: true, placeholder: "https://github.com/..." },
+    { k: "featured", label: "Hiện ở “Dự án nổi bật”", type: "check", full: true },
+    { k: "description", label: "Mô tả", hint: "(chỉ dùng khi Description trên GitHub để trống)", type: "textarea", rows: 3, full: true },
+    { k: "tags", label: "Công nghệ", hint: "(chỉ dùng khi Topics trên GitHub để trống; phân cách bằng dấu phẩy)", type: "csv", full: true, placeholder: "React, TypeScript" },
     { k: "image", label: "Ảnh chụp màn hình", type: "image", folder: "projects", full: true },
+    { k: "gallery", label: "Các màn hình khác", hint: "(mỗi dòng 1 đường dẫn ảnh)", type: "lines", full: true },
   ] },
   album: { title: "Album", fields: [
     { k: "title", label: "Tên album", full: true, placeholder: "Bình Định" },
@@ -546,6 +556,7 @@ const SCHEMA = {
     { k: "openToWork", label: "Đang sẵn sàng nhận việc", type: "check", full: true },
     { k: "bio", label: "Giới thiệu ngắn", type: "textarea", rows: 3, full: true },
     { k: "about", label: "Giới thiệu dài", hint: "(trang Thông tin cá nhân, xuống dòng = sang đoạn mới)", type: "textarea", rows: 5, full: true },
+    { k: "quote", label: "Câu trích dẫn", type: "textarea", rows: 2, full: true },
     { k: "interests", label: "Sở thích", hint: "(mỗi dòng 1 mục)", type: "lines", full: true },
     { k: "taglines", label: "Tagline", hint: "(mỗi dòng 1 câu, đổi luân phiên)", type: "lines", full: true },
     { k: "learning", label: "Đang học", hint: "(mỗi dòng 1 mục)", type: "lines", full: true },
@@ -669,7 +680,7 @@ document.addEventListener("keydown", (e) => e.key === "Escape" && closeDrawer())
 
 /* ---------------- Sửa / đổi chỗ / xóa một mục ---------------- */
 
-const PROFILE_LISTS = ["languages", "spokenLanguages", "skillGroups", "roadmap", "experience"];
+const PROFILE_LISTS = ["languages", "spokenLanguages", "skillGroups", "roadmap", "experience", "press"];
 const swap = (arr, i, j) => j >= 0 && j < arr.length && ([arr[i], arr[j]] = [arr[j], arr[i]]);
 const reorderAll = (arr, mark) => arr.forEach((x, i) => ((x.order = i), mark(x)));
 
@@ -706,24 +717,30 @@ function itemAction(el, act) {
     return;
   }
 
+  if (kind === "course") {
+    const c = PF().COURSES.find((x) => x.code === key);
+    return openDrawer({
+      ...SCHEMA.course, title: `Môn ${c.code}`, value: c,
+      onApply: (d) => {
+        P.courseNotes = { ...(P.courseNotes || {}), [c.code]: d };
+        c.title = d.title;
+        c.intro = c.githubIntro || d.intro;
+        changed("profile");
+        refresh();
+      },
+    });
+  }
+
   if (kind === "project") {
     const i = PROJECTS.findIndex((p) => p._id === key);
     const p = PROJECTS[i];
-    const remove = () => {
-      if (!confirm(`Xóa dự án "${p.title}"?`)) return false;
-      PROJECTS.splice(i, 1);
-      dirty.projects.delete(key);
-      dirty.delProjects.add(key);
-      refresh();
-    };
     if (act === "edit")
-      return openDrawer({ ...SCHEMA.project, value: p, onApply: (d) => (Object.assign(p, d), changed("project", key), refresh()), onDelete: remove });
+      return openDrawer({ ...SCHEMA.project, value: p, onApply: (d) => (Object.assign(p, d), changed("project", key), refresh()) }); // thêm/bớt dự án: gắn hoặc bỏ sao Study trên GitHub
     if (act === "up" || act === "down") {
       swap(PROJECTS, i, act === "up" ? i - 1 : i + 1);
       reorderAll(PROJECTS, (x) => dirty.projects.add(x._id));
       refresh();
     }
-    if (act === "remove") remove();
     return;
   }
 
@@ -787,18 +804,6 @@ function addItem(kind, parentId) {
       onApply: (d) => {
         (P[kind] = P[kind] || []).push(d);
         changed("profile");
-        refresh();
-      },
-    });
-
-  if (kind === "project")
-    return openDrawer({
-      ...SCHEMA.project, title: "Thêm dự án", value: { year: new Date().getFullYear() },
-      onApply: (d) => {
-        if (!d.title) return toast("Cần nhập tên dự án.", "err"), false;
-        const _id = doc(collection(db, "projects")).id;
-        PROJECTS.push({ _id, ...d, order: PROJECTS.length });
-        changed("project", _id);
         refresh();
       },
     });

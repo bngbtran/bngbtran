@@ -15,7 +15,7 @@
   setupChrome();
   app.innerHTML = `<div class="loading mono"><span class="dot pulse"></span> đang tải</div>`;
   if (EDIT) Store.clearCache();
-  const { PROFILE: P, ALBUMS, PROJECTS } = await Store.load();
+  const { PROFILE: P, ALBUMS, PROJECTS, COURSES } = await Store.load();
 
   const formatDate = (d) => {
     if (!d) return "";
@@ -56,18 +56,22 @@
 
   /* ---------------- Số liệu & chữ (tính lại mỗi khi dữ liệu đổi) ---------------- */
 
-  let totalPhotos, totalAlbums, yearsCoding, allSkills, links, T, vars;
+  let totalPhotos, totalAlbums, totalProjects, totalTech, yearsCoding, allSkills, links, T, vars;
   function derive() {
     totalPhotos = ALBUMS.reduce((n, a) => n + countPhotos(a), 0);
     totalAlbums = countAlbums(ALBUMS);
     yearsCoding = P.startedCoding ? Math.max(1, new Date().getFullYear() - P.startedCoding) : 0;
     allSkills = (P.skillGroups || []).flatMap((g) => g.items || []);
+    // Số "công nghệ & công cụ": bỏ nhóm kỹ năng mềm, tên trùng chỉ tính một lần
+    totalTech = new Set((P.skillGroups || []).filter((g) => !/kỹ năng mềm|soft skill/i.test(g.title || "")).flatMap((g) => g.items || []).map((s) => String(s).trim().toLowerCase())).size;
     links = P.links || {};
+    // Tổng dự án = dự án đã deploy + dự án học tập, repo nằm ở cả hai chỉ tính một lần
+    totalProjects = new Set([...PROJECTS.map((p) => p.repo || p.title), ...COURSES.map((c) => c.code)].map((k) => String(k).toLowerCase())).size;
     // Chữ trên trang: mặc định là TEXTS trong data.js, ghi đè bằng P.texts
     T = { ...(typeof TEXTS !== "undefined" ? TEXTS : {}) };
     if (P.statement) T.statement = P.statement;
     for (const [k, v] of Object.entries(P.texts || {})) if (v) T[k] = v;
-    vars = { photos: totalPhotos, albums: totalAlbums, projects: PROJECTS.length, location: P.location || "Việt Nam", year: new Date().getFullYear() };
+    vars = { photos: totalPhotos, albums: totalAlbums, projects: totalProjects, location: P.location || "Việt Nam", year: new Date().getFullYear() };
   }
   derive();
 
@@ -162,8 +166,7 @@
         </div>
       </div>
       <div class="wrap footer-bottom">
-        <span>© ${new Date().getFullYear()} ${esc(P.name || "")}</span>
-        <span class="serif">${txt("footerNote")}</span>
+        <span>© ${new Date().getFullYear()}_<span class="serif">${esc(P.name || "")}</span></span>
         <nav class="footer-links">${social}</nav>
       </div>`;
     const sign = document.querySelector("#site-footer .sig-draw");
@@ -178,7 +181,6 @@
   /* ---------------- Tổng quan ---------------- */
 
   function viewOverview() {
-    const current = (P.roadmap || []).find((r) => r.status === "current");
     const featured = PROJECTS.filter((p) => p.featured);
     const nameParts = String(P.name || "").trim().split(/\s+/);
     const last = nameParts[nameParts.length - 1] || "";
@@ -188,7 +190,6 @@
     const taglines = P.taglines || [];
     const facts = [
       ["Vị trí", esc(P.role || "")],
-      current && current.title !== P.role && ["Hiện tại", esc(current.title)],
       P.location && ["Nơi ở", esc(P.location)],
       links.email && ["Email", `<a class="v" href="mailto:${esc(links.email)}">${esc(links.email)}</a>`],
       links.github && ["GitHub", `<a class="v" href="${esc(links.github)}" target="_blank" rel="noopener">${esc(links.github.replace(/^https?:\/\/(www\.)?/, ""))}</a>`],
@@ -215,7 +216,7 @@
 
         <div class="hero-lede">
           <div>
-            <p class="hero-statement"><em>${esc(P.role || "")}</em> ${rich("statement")}</p>
+            <p class="hero-statement"><em>${esc(P.role || "")}</em>${/^[,.:;]/.test(fill("statement")) ? "" : " "}${rich("statement")}</p>
             ${taglines.length ? `<span class="tagline" data-tagline>${esc(taglines[0])}</span>` : ""}
           </div>
           <div>
@@ -238,8 +239,8 @@
         <div class="stats">
           ${stat(yearsCoding, txt("statYears"), "+")}
           ${stat((P.languages || []).length, txt("statLanguages"))}
-          ${stat(allSkills.length, txt("statSkills"))}
-          ${stat(PROJECTS.length, txt("statProjects"))}
+          ${stat(totalTech, txt("statSkills"))}
+          ${stat(totalProjects, txt("statProjects"))}
         </div>
       </div>
 
@@ -294,7 +295,7 @@
       </div>
     </section>`;
 
-  const LEVELS = ["", "Mới học", "Cơ bản", "Thành thạo vừa", "Thành thạo", "Chuyên sâu"];
+  const LEVELS = ["", "Mới học", "Cơ bản", "Trung bình", "Thành thạo", "Chuyên sâu"];
 
   function sectionLanguages() {
     const langs = P.languages || [];
@@ -306,17 +307,17 @@
       <div class="lang-list"${list("languages")}>
         ${langs
           .map((l, i) => {
-            const lv = Math.max(1, Math.min(5, l.level || 1));
+            const lv = l.level ? Math.max(1, Math.min(5, l.level)) : 0; // không ghi mức độ thì không hiện thang
             return `
           <div class="lang-row"${item("languages", i)}>
             <div>
               <div class="lang-name">${esc(l.name)}</div>
               ${l.note ? `<div class="lang-note">${esc(l.note)}</div>` : ""}
             </div>
-            <div class="meter" role="img" aria-label="Mức độ ${lv}/5">
+            ${lv ? `<div class="meter" role="img" aria-label="Mức độ ${lv}/5">
               ${[1, 2, 3, 4, 5].map((i) => `<i class="${i < lv ? "on" : i === lv ? "on peak" : ""}"></i>`).join("")}
             </div>
-            <div class="lang-level">${LEVELS[lv]}</div>
+            <div class="lang-level">${LEVELS[lv]}</div>` : ""}
             <div class="lang-years">${l.years ? `${esc(l.years)} năm` : ""}</div>
           </div>`;
           })
@@ -389,6 +390,7 @@
               ${e.description ? `<p class="exp-desc">${esc(e.description)}</p>` : ""}
               ${(e.highlights || []).length ? `<ul class="exp-highlights">${e.highlights.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
               ${(e.tech || []).length ? `<div class="tech">${e.tech.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
+              ${Object.keys(e.links || {}).length ? `<div class="project-links exp-links">${Object.entries(e.links).map(([k, v]) => `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(k)} ${ARROW_UP}</a>`).join("")}</div>` : ""}
             </div>
           </article>`
           )
@@ -495,12 +497,14 @@
       ? `<img src="${esc(img(p.image, 1200))}" alt="${esc(title)}" loading="lazy" />`
       : `<div class="thumb-fallback">${esc(title.split(/\s+/).slice(0, 2).map((w) => w[0]).join(""))}</div>`;
     const href = p.demo || p.source || "";
+    // Các màn hình của dự án: ảnh chính + gallery, bấm để phóng to
+    const shots = [p.image, ...(p.gallery || [])].filter(Boolean);
     const links = [
       p.demo && `<a href="${esc(p.demo)}" target="_blank" rel="noopener">Xem website ${ARROW_UP}</a>`,
       p.source && `<a href="${esc(p.source)}" target="_blank" rel="noopener">Mã nguồn ${ARROW_UP}</a>`,
     ].filter(Boolean).join("");
     return `
-      <article class="project-card" data-tags="${esc((p.tags || []).join("|"))}"${item("project", p._id, reorder ? "" : " data-fixed")}>
+      <article class="project-card" data-tags="${esc((p.tags || []).join("|"))}"${item("project", p._id, reorder ? " data-here" : " data-fixed data-here")}>
         ${href ? `<a class="project-media" href="${esc(href)}" target="_blank" rel="noopener">` : `<div class="project-media">`}
           ${media}
           <span class="project-index" aria-hidden="true">№${pad2(i + 1)}</span>
@@ -508,6 +512,9 @@
         <div class="project-body">
           <div class="project-head"><h3>${esc(title)}</h3><span class="project-year">${esc(p.year || "")}</span></div>
           <p>${esc(p.description || "")}</p>
+          ${shots.length > 1 ? `<div class="project-shots">${shots
+            .map((src, k) => `<button type="button" class="project-shot" data-project="${PROJECTS.indexOf(p)}" data-index="${k}" aria-label="Xem màn hình ${k + 1} của ${esc(title)}"><img src="${esc(img(src, 300))}" alt="" loading="lazy" /></button>`)
+            .join("")}</div>` : ""}
           ${(p.tags || []).length ? `<div class="tech" data-label="Chất liệu">${p.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}
           ${links ? `<div class="project-links">${links}</div>` : ""}
         </div>
@@ -516,9 +523,58 @@
 
   // Lưới tự điều chỉnh: 1 dự án → thẻ ngang to; số lẻ → thẻ cuối trải ngang
   const projectGrid = (projects, reorder = true) =>
-    `<div class="project-grid ${projects.length === 1 ? "solo" : projects.length % 2 ? "odd" : ""}"${reorder ? list("project") : ""}>${projects
+    `<div class="project-grid ${projects.length === 1 ? "solo" : projects.length % 2 ? "odd" : ""}">${projects
       .map((p, i) => projectCard(p, i, reorder))
       .join("")}</div>`;
+
+  // Hai tab của trang Dự án: Sản phẩm (có ảnh) và Học tập (chỉ giới thiệu)
+  const projectTabs = (active) => `
+    <nav class="project-tabs" aria-label="Loại dự án">
+      <a href="#/projects"${active === "main" ? ' class="active" aria-current="page"' : ""}>${txt("projectsTabMain")}<sup>${pad2(PROJECTS.length)}</sup></a>
+      <a href="#/projects/study"${active === "study" ? ' class="active" aria-current="page"' : ""}>${txt("projectsTabStudy")}<sup>${pad2(COURSES.length)}</sup></a>
+    </nav>`;
+
+  function viewStudy() {
+    const groups = [
+      { id: "fpt", mark: "FPT", title: "courseGroupFpt", desc: "courseGroupFptDesc", tag: "fpt-university" },
+      { id: "fsb", mark: "FSB", title: "courseGroupFsb", desc: "courseGroupFsbDesc", tag: "fsb" },
+    ];
+    const row = (c) => `
+      <a class="course-row" href="${esc(c.url)}" target="_blank" rel="noopener"${item("course", c.code, " data-fixed data-here")}>
+        <span class="course-code">${esc(c.code)}</span>
+        <span class="course-text">
+          ${c.title ? `<span class="course-title">${esc(c.title)}</span>` : ""}
+          ${c.intro ? `<span class="course-intro">${esc(c.intro)}</span>` : ""}
+        </span>
+        <span class="course-lang">${esc(c.language)}</span>
+        ${ARROW_UP}
+      </a>`;
+    return `
+      <section class="wrap page-head">
+        <span class="eyebrow">${txt("studyEyebrow")}</span>
+        <h1 class="page-title">${rich("studyHeading")}</h1>
+        <p class="page-desc">${txt("studyDesc")}</p>
+        ${projectTabs("study")}
+      </section>
+      <div class="wrap page-body course-groups">
+        ${groups
+          .map((g) => {
+            const list = COURSES.filter((c) => c.group === g.id);
+            return !list.length ? "" : `
+          <section class="section-grid course-group">
+            <div class="section-label">
+              <span class="section-num" aria-hidden="true">${g.mark}</span>
+              <h2 class="section-title">${txt(g.title)}</h2>
+              <code class="section-code" aria-hidden="true">&lt;${g.tag} /&gt;</code>
+              <p class="section-desc">${txt(g.desc)}</p>
+              <p class="course-count">${pad2(list.length)} môn</p>
+            </div>
+            <div class="course-list">${list.map(row).join("")}</div>
+          </section>`;
+          })
+          .join("")}
+      </div>`;
+  }
 
   function viewProjects() {
     const tags = [...new Set(PROJECTS.flatMap((p) => p.tags || []))];
@@ -526,7 +582,7 @@
       <section class="wrap page-head">
         <span class="eyebrow">${txt("projectsEyebrow")}</span>
         <h1 class="page-title">${rich("projectsHeading")}</h1>
-        <p class="page-meta">${pad2(PROJECTS.length)} dự án</p>
+        ${projectTabs("main")}
         ${
           tags.length > 1
             ? `<div class="filters">
@@ -595,7 +651,11 @@
         <div class="about-main">
           <p class="about-lede">${ed("P.bio", esc(P.bio || ""), { multi: true, ph: "Viết vài dòng giới thiệu..." })}</p>
           ${P.about || EDIT ? `<div class="about-text">${ed("P.about", esc(P.about || "").replace(/\n/g, "<br/>"), { multi: true, ph: "Kể thêm về bản thân: con đường đến với code, điều bạn quan tâm..." })}</div>` : ""}
+          ${P.quote || EDIT ? `<blockquote class="about-quote">${ed("P.quote", esc(P.quote || ""), { multi: true, ph: "Một câu bạn tâm đắc..." })}</blockquote>` : ""}
           ${block("aboutContact", linkRows && `<ul class="about-links">${linkRows}</ul>`)}
+          ${(P.press || []).length || EDIT ? `<div class="about-block"><h3 class="about-h">${txt("aboutPress")}</h3><div class="about-press"${list("press")}>${(P.press || [])
+            .map((b, i) => `<a href="${esc(b.url)}" target="_blank" rel="noopener"${item("press", i)}><span class="press-title">${esc(b.title)}</span><span class="press-meta mono">${esc([b.source, b.date].filter(Boolean).join(" · "))}</span>${ARROW_UP}</a>`)
+            .join("")}</div></div>` : ""}
           <div class="about-grid">
             ${block("aboutInterests", (P.interests || []).length && `<div class="chips">${chips(P.interests)}</div>`)}
             ${block("aboutLanguages", (P.spokenLanguages || []).length && `<ul class="about-list">${P.spokenLanguages.map((l) => `<li><b>${esc(l.name)}</b><span>${esc(l.level)}</span></li>`).join("")}</ul>`)}
@@ -622,7 +682,7 @@
     if (parts.length === 0) [html, tab] = [viewOverview(), "overview"];
     else if (parts[0] === "about") [html, tab] = [viewAbout(), "about"];
     else if (parts[0] === "albums") [html, tab] = [viewAlbums(parts.slice(1)), "albums"];
-    else if (parts[0] === "projects") [html, tab] = [viewProjects(), "projects"];
+    else if (parts[0] === "projects") [html, tab] = [parts[1] === "study" ? viewStudy() : viewProjects(), "projects"];
     else [html, tab] = [viewNotFound(), null];
 
     const y = scrollY;
@@ -802,7 +862,7 @@
       { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
     );
     app
-      .querySelectorAll(".section-grid, .album-card, .project-card, .photo, .lang-row, .skill-group, .road-step, .exp-item")
+      .querySelectorAll(".section-grid, .album-card, .project-card, .photo, .lang-row, .skill-group, .road-step, .exp-item, .course-row")
       .forEach((el, i) => {
         el.classList.add("reveal");
         el.style.transitionDelay = `${(i % 4) * 70}ms`;
@@ -850,6 +910,11 @@
       });
       return;
     }
+    const shot = e.target.closest(".project-shot");
+    if (shot) {
+      const p = PROJECTS[+shot.dataset.project];
+      return showLightbox([p.image, ...(p.gallery || [])].filter(Boolean).map((src) => ({ src, caption: p.title })), +shot.dataset.index);
+    }
     const ph = e.target.closest(".photo");
     if (ph) openLightbox(ph.dataset.path.split("/"), +ph.dataset.index);
   });
@@ -865,7 +930,11 @@
   function openLightbox(ids, index) {
     const chain = resolvePath(ids);
     if (!chain) return;
-    lbPhotos = ownPhotos(chain[chain.length - 1]);
+    showLightbox(ownPhotos(chain[chain.length - 1]), index);
+  }
+
+  function showLightbox(photos, index) {
+    lbPhotos = photos;
     lastFocus = document.activeElement;
     lb.hidden = false;
     document.body.style.overflow = "hidden";
@@ -918,7 +987,7 @@
 
   // Cho lớp chỉnh sửa (admin.js) đọc & sửa dữ liệu rồi vẽ lại trang
   window.Portfolio = {
-    P, ALBUMS, PROJECTS, T: () => T, kids, photoOf, ownPhotos,
+    P, ALBUMS, PROJECTS, COURSES, T: () => T, kids, photoOf, ownPhotos,
     refresh() {
       derive();
       renderFooter();
@@ -931,6 +1000,7 @@
       Object.assign(P, profile);
       ALBUMS.splice(0, ALBUMS.length, ...data.ALBUMS);
       PROJECTS.splice(0, PROJECTS.length, ...data.PROJECTS);
+      COURSES.splice(0, COURSES.length, ...data.COURSES);
       this.refresh();
     },
   };

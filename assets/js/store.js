@@ -72,13 +72,18 @@ const Store = (() => {
   async function loadOnline() {
     try {
       const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "null");
-      if (cached && Date.now() - cached.t < CACHE_MS) return cached.data;
+      if (cached && Date.now() - cached.t < CACHE_MS) {
+        studyRepos = cached.repos || null;
+        studyCourses = cached.courses || null;
+        return cached.data;
+      }
     } catch (_) {}
 
     const [profile, albums, projects] = await Promise.all([
       getDoc("site/profile"),
       getCollection("albums"),
       getCollection("projects"),
+      loadStudyRepos(),
     ]);
     const data = shape(profile, albums, projects);
     saveCache(data);
@@ -90,13 +95,89 @@ const Store = (() => {
     return {
       PROFILE: profile || (typeof PROFILE !== "undefined" ? PROFILE : {}),
       ALBUMS: buildTree(albums),
-      PROJECTS: [...projects].sort(byOrder),
+      PROJECTS: mergeProjects(projects),
+      COURSES: mergeCourses(profile),
     };
+  }
+
+  /* ---------- Dự án: danh sách do GitHub Star List "Study" quyết định ----------
+     Từ GitHub (luôn theo GitHub): danh sách repo, link website, link mã nguồn, năm.
+     Từ GitHub nếu có, không thì lấy nội dung riêng: mô tả (Description), công nghệ (Topics).
+     Nội dung riêng (Firestore > data.js): tên hiển thị, ảnh, nổi bật, thứ tự. */
+  let studyRepos = null;
+  let studyCourses = null;
+
+  // Trả về true nếu đọc được danh sách mới từ GitHub
+  async function loadStudyRepos() {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch("/api/github-projects", { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) return false;
+      const json = await res.json();
+      studyRepos = json.repos || null;
+      studyCourses = json.courses || null;
+      return !!studyRepos;
+    } catch (_) {
+      return false; // Không đọc được GitHub: giữ danh sách đang có, hoặc danh sách dự phòng trong data.js
+    }
+  }
+
+  const repoOf = (p) => String(p.repo || (String(p.source || "").match(/github\.com\/[^/]+\/([^/?#]+)/) || [])[1] || "").toLowerCase();
+  const filled = (o = {}) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== "" && v !== null && v !== undefined && !(Array.isArray(v) && !v.length)));
+
+  function mergeProjects(saved) {
+    const seeds = typeof PROJECTS !== "undefined" ? PROJECTS : [];
+    const repos = studyRepos || seeds.filter((p) => p.repo).map((p) => ({ name: p.repo, url: p.source }));
+    return repos
+      .map((r, i) => {
+        const key = r.name.toLowerCase();
+        const doc = saved.find((p) => repoOf(p) === key);
+        const own = { ...filled(seeds.find((p) => repoOf(p) === key)), ...filled(doc) };
+        return {
+          title: r.name,
+          image: r.image || "",
+          ...own,
+          description: r.description || own.description || "",
+          tags: (r.topics && r.topics.length && r.topics) || own.tags || (r.language ? [r.language] : []),
+          demo: r.homepage != null ? r.homepage : own.demo || "",
+          source: r.url || own.source || "",
+          year: r.year || own.year || null,
+          repo: r.name,
+          _id: doc ? doc._id : `gh-${key}`,
+          order: doc && doc.order != null ? doc.order : i,
+        };
+      })
+      .sort((a, b) => a.order - b.order);
+  }
+
+  // Tab Học tập: danh sách theo GitHub. Tên môn: admin (profile.courseNotes) > data.js.
+  // Giới thiệu: Description trên GitHub > admin > data.js.
+  function mergeCourses(profile) {
+    const notes = (profile && profile.courseNotes) || {};
+    const seeds = typeof COURSES !== "undefined" ? COURSES : [];
+    return ["fpt", "fsb"].flatMap((group) => {
+      const repos = (studyCourses && studyCourses[group]) || seeds.filter((c) => c.group === group).map((c) => ({ name: c.repo, language: c.language }));
+      return repos.map((r) => {
+        const seed = seeds.find((c) => c.repo.toLowerCase() === r.name.toLowerCase()) || {};
+        const note = notes[r.name] || {};
+        return {
+          group,
+          code: r.name,
+          title: note.title || seed.title || "",
+          githubIntro: r.description || "",
+          intro: r.description || note.intro || seed.intro || "",
+          language: r.language || seed.language || "",
+          url: r.url || `https://github.com/bngbtran/${r.name}`,
+        };
+      });
+    });
   }
 
   function saveCache(data) {
     try {
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), data }));
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), data, repos: studyRepos, courses: studyCourses }));
     } catch (_) {}
   }
 
@@ -105,6 +186,7 @@ const Store = (() => {
       PROFILE: typeof PROFILE !== "undefined" ? PROFILE : {},
       ALBUMS: typeof ALBUMS !== "undefined" ? ALBUMS : [],
       PROJECTS: typeof PROJECTS !== "undefined" ? PROJECTS : [],
+      COURSES: mergeCourses(),
     };
     if (!online()) return { ...local, source: "local" };
     try {
@@ -127,5 +209,5 @@ const Store = (() => {
     } catch (_) {}
   };
 
-  return { online, load, img, buildTree, decodeFields, clearCache, shape, saveCache };
+  return { online, load, img, buildTree, decodeFields, clearCache, shape, saveCache, loadStudyRepos };
 })();
