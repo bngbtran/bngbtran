@@ -1,0 +1,52 @@
+# Dựng lại README từ dữ liệu sống của portfolio. Chỉ commit khi có thay đổi.
+name: Sync README
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - assets/js/**
+      - api/**
+      - scripts/build-readme.py
+      - scripts/readme-data.cjs
+      - .github/workflows/readme.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: readme-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/readme-fonts
+          key: readme-fonts-v1
+      - run: python -m pip install --quiet fonttools
+      - run: python scripts/build-readme.py
+      - name: Commit nếu README đổi
+        run: |
+          git add README.md images/readme
+          if git diff --staged --quiet; then
+            echo "README không đổi"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(readme): sync from portfolio"
+          git pull --rebase origin main
+          git push
