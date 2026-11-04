@@ -677,6 +677,8 @@
   /* ---------------- Router ---------------- */
 
   function route(keepScroll = false) {
+    // Trang chủ dùng địa chỉ gọn "/" thay vì "/#/"; replaceState không tạo thêm bước Back
+    if (/^#\/?$/.test(location.hash)) history.replaceState(history.state, "", location.pathname + location.search);
     const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
     let html, tab;
     if (parts.length === 0) [html, tab] = [viewOverview(), "overview"];

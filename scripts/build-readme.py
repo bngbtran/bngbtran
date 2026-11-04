@@ -174,6 +174,21 @@ def pic(name, alt, width="100%"):
 SITE = "https://bngbtran.vercel.app"
 def asset(u):
     return re.sub(r"^\./", "", u or "")
+# GitHub bỏ CSS nên chỉ ảnh align="right" mới đẩy được năm sang lề phải cùng dòng với tên.
+# Một màu xám đọc được trên cả nền sáng lẫn tối; dòng cao 25px khớp với <h3> để cùng đường chân chữ.
+def year_badge(year, href):
+    year = str(year or "")
+    if not re.fullmatch(r"\d{4}", year):
+        return ""
+    d, w = text("mono", year, 13, 0, 18)
+    width = math.ceil(w)
+    write(f"year-{year}.svg", width, 25, f'<path d="{d}" fill="#7d8590"/>')
+    img = f'<img src="images/readme/year-{year}.svg" alt="{year}" align="right" width="{width}" height="25" />'
+    return f'<a href="{e(href)}">{img}</a>' if href else img
+
+for old in OUT.glob("year-*.svg"):  # Năm không còn dùng thì bỏ
+    old.unlink()
+
 def card(p, span=False):
     links = " · ".join(f'<a href="{e(u)}">{l} ↗</a>' for l, u in (("Website", p.get("demo")), ("Mã nguồn", p.get("source"))) if u)
     tags = " ".join(f"<code>{e(x)}</code>" for x in p.get("tags", []))
@@ -181,10 +196,10 @@ def card(p, span=False):
     shot = f'<img src="{e(src)}" alt="{e(p["title"])}" width="100%" />' if src else ""
     if shot and href:
         shot = f'<a href="{e(href)}">{shot}</a>'
-    year = f' <sub>{e(str(p["year"]))}</sub>' if p.get("year") else ""
+    year = year_badge(p.get("year"), href)
     desc = f'<p>{e(p["description"])}</p>' if p.get("description") else ""
     attr = 'colspan="2"' if span else 'width="50%"'
-    return (f'<td {attr} valign="top">{shot}<h3>{e(p["title"])}{year}</h3>{desc}'
+    return (f'<td {attr} valign="top">{shot}<h3>{year}{e(p["title"])}</h3>{desc}'
             + (f"<p>{tags}</p>" if tags else "") + (f"<p>{links}</p>" if links else "") + "</td>")
 # Như lưới trên web: số lẻ thì thẻ cuối trải ngang
 rows = "".join("<tr>" + "".join(card(p, len(PROJECTS[i:i+2]) == 1) for p in PROJECTS[i:i+2]) + "</tr>" for i in range(0, len(PROJECTS), 2))
