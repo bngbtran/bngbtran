@@ -142,7 +142,7 @@ def stats(t, c):
         p, w = path("serif", num, 62, x, 80, c["text"], -.04)
         b.append(p)
         if sup:
-            b.append(path("italic", sup, 26, x + w + 4, 48, c["a"])[0])
+            b.append(path("mono", sup, 24, x + w + 6, 48, c["a"])[0])
         b.append(path("sans", label, 15, x, 114, c["dim"])[0])
     write(f"stats-{t}.svg", W, H, "".join(b))
 
@@ -155,7 +155,9 @@ def heading(t, c, num, title, tag):
     r, _ = path("mono", f"<{tag} />", 13, x, 90, c["a"])
     write(f"h-{tag}-{t}.svg", W, H, bg + p + q + r + f'<rect x="{x + tw + 24:.0f}" y="54" width="{max(0, W - x - tw - 56):.0f}" height="1" fill="{c["line"]}"/>')
 
-HEADS = [("01", "Dự án", "projects"), ("02", TX["skillsTitle"], "skills"), ("03", TX["experienceTitle"], "experience")]
+# Như section() trên web: tự đánh số theo thứ tự, mục trống thì bỏ qua; tiêu đề lấy từ chữ của trang
+HEADS = [(f"{i:02d}", title, tag) for i, (title, tag) in enumerate(
+    [x[:2] for x in ((TX["projectsEyebrow"], "projects", PROJECTS or COURSES), (TX["skillsTitle"], "skills", P.get("languages") or P.get("skillGroups")), (TX["experienceTitle"], "experience", P.get("experience"))) if x[2]], 1)]
 for t, c in THEMES.items():
     hero(t, c)
     stats(t, c)
@@ -213,6 +215,19 @@ def exp(x):
 
 email = P["links"]["email"]
 projects_label, study_label = TX["projectsTabMain"], TX["projectsTabStudy"]
+BODY = {
+    "projects": f"""**{e(projects_label)}** · {len(PROJECTS)} dự án
+
+<table>{rows}</table>
+
+**{e(study_label)}** · {len(COURSES)} môn
+
+{courses}""",
+    "skills": f"<table>{skill_rows}</table>",
+    "experience": f"""<table>{"".join(exp(x) for x in P.get("experience", []))}</table>""",
+}
+sections = "\n\n".join(f'{pic("h-" + tag, num + " " + title)}\n\n{BODY[tag]}' for num, title, tag in HEADS)
+
 readme = f'''<!-- Tệp này được GitHub Actions tự dựng từ dữ liệu portfolio. Đừng sửa tay: thay đổi sẽ bị ghi đè. -->
 
 {pic("hero", P["name"] + " · " + P["role"])}
@@ -225,23 +240,7 @@ readme = f'''<!-- Tệp này được GitHub Actions tự dựng từ dữ liệ
 
 {pic("stats", " · ".join(f"{a}{b} {c}" for a, b, c in STATS))}
 
-{pic("h-projects", "01 Dự án")}
-
-**{e(projects_label)}** · {len(PROJECTS)} dự án
-
-<table>{rows}</table>
-
-**{e(study_label)}** · {len(COURSES)} môn
-
-{courses}
-
-{pic("h-skills", "02 " + TX["skillsTitle"])}
-
-<table>{skill_rows}</table>
-
-{pic("h-experience", "03 " + TX["experienceTitle"])}
-
-<table>{"".join(exp(x) for x in P["experience"])}</table>
+{sections}
 '''
 (ROOT / "README.md").write_text(readme, encoding="utf8")
 print("OK", [p.name for p in sorted(OUT.iterdir())], "| README", len(readme), "| stats", STATS)
